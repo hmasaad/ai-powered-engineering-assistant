@@ -1,0 +1,156 @@
+{
+  "salons": [
+    {
+      "id": "salon-1",
+      "name": "Luxe Hair Studio",
+      "address": "128 Mercer Street",
+      "city": "New York",
+      "rating": 4.8,
+      "reviewCount": 214,
+      "imageUrl": "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=800",
+      "description": "Modern cuts, color, and blowouts in a calm downtown studio.",
+      "tags": ["Hair", "Color", "Blowout"]
+    },
+    {
+      "id": "salon-2",
+      "name": "Bloom Nail Bar",
+      "address": "45 Orchard Lane",
+      "city": "Brooklyn",
+      "rating": 4.6,
+      "reviewCount": 163,
+      "imageUrl": "https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800",
+      "description": "Manicures, pedicures, and nail art with organic polishes.",
+      "tags": ["Nails", "Pedicure", "Art"]
+    },
+    {
+      "id": "salon-3",
+      "name": "Serenity Spa & Salon",
+      "address": "9 Riverside Drive",
+      "city": "Queens",
+      "rating": 4.9,
+      "reviewCount": 301,
+      "imageUrl": "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?w=800",
+      "description": "Full-service spa and salon for hair, skin, and wellness.",
+      "tags": ["Spa", "Facial", "Hair"]
+    }
+  ],
+  "services": [
+    {
+      "id": "svc-1",
+      "salonId": "salon-1",
+      "name": "Signature Haircut",
+      "description": "Consultation, wash, cut, and style.",
+      "durationMinutes": 45,
+      "price": 65
+    },
+    {
+      "id": "svc-2",
+      "salonId": "salon-1",
+      "name": "Balayage Color",
+      "description": "Hand-painted highlights with toner and finish.",
+      "durationMinutes": 120,
+      "price": 185
+    },
+    {
+      "id": "svc-3",
+      "salonId": "salon-1",
+      "name": "Blowout",
+      "description": "Wash and professional blow-dry styling.",
+      "durationMinutes": 35,
+      "price": 45
+    },
+    {
+      "id": "svc-4",
+      "salonId": "salon-2",
+      "name": "Gel Manicure",
+      "description": "Shape, cuticle care, and long-wear gel polish.",
+      "durationMinutes": 50,
+      "price": 40
+    },
+    {
+      "id": "svc-5",
+      "salonId": "salon-2",
+      "name": "Spa Pedicure",
+      "description": "Soak, scrub, massage, and polish.",
+      "durationMinutes": 60,
+      "price": 55
+    },
+    {
+      "id": "svc-6",
+      "salonId": "salon-3",
+      "name": "Hydrating Facial",
+      "description": "Deep cleanse, mask, and moisture treatment.",
+      "durationMinutes": 70,
+      "price": 95
+    },
+    {
+      "id": "svc-7",
+      "salonId": "salon-3",
+      "name": "Women's Cut & Style",
+      "description": "Precision cut with finish styling.",
+      "durationMinutes": 50,
+      "price": 70
+    }
+  ],
+  "stylists": [
+    {
+      "id": "sty-1",
+      "salonId": "salon-1",
+      "name": "Ava Chen",
+      "title": "Senior Stylist",
+      "rating": 4.9,
+      "imageUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400",
+      "serviceIds": ["svc-1", "svc-2", "svc-3"]
+    },
+    {
+      "id": "sty-2",
+      "salonId": "salon-1",
+      "name": "Jordan Blake",
+      "title": "Color Specialist",
+      "rating": 4.7,
+      "imageUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400",
+      "serviceIds": ["svc-1", "svc-2"]
+    },
+    {
+      "id": "sty-3",
+      "salonId": "salon-2",
+      "name": "Mia Patel",
+      "title": "Nail Artist",
+      "rating": 4.8,
+      "imageUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400",
+      "serviceIds": ["svc-4", "svc-5"]
+    },
+    {
+      "id": "sty-4",
+      "salonId": "salon-3",
+      "name": "Elena Rossi",
+      "title": "Esthetician",
+      "rating": 5.0,
+      "imageUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400",
+      "serviceIds": ["svc-6"]
+    },
+    {
+      "id": "sty-5",
+      "salonId": "salon-3",
+      "name": "Sam Okonkwo",
+      "title": "Stylist",
+      "rating": 4.6,
+      "imageUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400",
+      "serviceIds": ["svc-7"]
+    }
+  ],
+  "bookings": [
+    {
+      "id": "book-1",
+      "salonId": "salon-1",
+      "salonName": "Luxe Hair Studio",
+      "serviceId": "svc-1",
+      "serviceName": "Signature Haircut",
+      "stylistId": "sty-1",
+      "stylistName": "Ava Chen",
+      "start": "2026-08-10T15:00:00.000",
+      "price": 65,
+      "status": "confirmed"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+---
+description: Local Ollama PR reviewer guidance for this Flutter project
+globs:
+alwaysApply: true
+---
+
+# Local PR Reviewer
+
+Use the local Ollama agent (not Cursor Cloud) to review PRs:
+
+```bash
+./scripts/pr-review.sh
+```
+
+Rules live in `agents/pr-reviewer/RULES.md`. Keep reviews aligned with the contract-driven BLoC layout:
+
+- `lib/core/contracts` → Data + Events
+- `lib/blocs` → `BaseBloc` handlers
+- `lib/services` → API wrappers returning `ResponseEntity`
+- `lib/api` → sample APIs + entities
+- `lib/ui` → `BaseState` + `BlocBuilder`
+- `lib/inject/injector.dart` → get_it DI
+
+Gather diff + surrounding code + `flutter analyze` before asserting issues. Prefer actionable, file-scoped findings.

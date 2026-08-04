@@ -36,13 +36,27 @@ DEFAULT_TOP_K = int(os.environ.get("PR_REVIEW_TOP_K", "8"))
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        cmd,
-        cwd=cwd or ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=cwd or ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=127,
+            stdout="",
+            stderr=f"command not found: {cmd[0]} ({exc})",
+        )
+
+
+def which(cmd: str) -> str | None:
+    from shutil import which as _which
+
+    return _which(cmd)
 
 
 def ensure_ollama(model: str) -> None:
@@ -90,34 +104,41 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
         )
 
     base_ref = fallback_base
-    gh = run(
-        [
-            "gh",
-            "pr",
-            "view",
-            str(pr_number),
-            "--json",
-            "baseRefName,title,url",
-        ]
-    )
-    if gh.returncode == 0 and gh.stdout.strip():
-        try:
-            meta = json.loads(gh.stdout)
-            base_name = meta.get("baseRefName") or "main"
-            base_ref = f"origin/{base_name}"
-            title = meta.get("title") or ""
-            url = meta.get("url") or ""
-            label = f"PR #{pr_number}"
-            if title:
-                label += f" — {title}"
-            if url:
-                label += f" ({url})"
-        except json.JSONDecodeError:
-            pass
+    if which("gh"):
+        gh = run(
+            [
+                "gh",
+                "pr",
+                "view",
+                str(pr_number),
+                "--json",
+                "baseRefName,title,url",
+            ]
+        )
+        if gh.returncode == 0 and gh.stdout.strip():
+            try:
+                meta = json.loads(gh.stdout)
+                base_name = meta.get("baseRefName") or "main"
+                base_ref = f"origin/{base_name}"
+                title = meta.get("title") or ""
+                url = meta.get("url") or ""
+                label = f"PR #{pr_number}"
+                if title:
+                    label += f" — {title}"
+                if url:
+                    label += f" ({url})"
+            except json.JSONDecodeError:
+                pass
+        else:
+            sys.stderr.write(
+                "Note: `gh pr view` failed; using "
+                f"--base {fallback_base} as the PR base.\n"
+            )
     else:
         sys.stderr.write(
-            "Note: `gh` unavailable or failed; using "
+            "Note: `gh` not installed; using "
             f"--base {fallback_base} as the PR base.\n"
+            "Optional: brew install gh\n"
         )
 
     # Ensure base ref exists locally when possible

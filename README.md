@@ -48,8 +48,8 @@ So feedback can respect this project’s BLoC layering instead of generic Flutte
 
 ```
 ┌─────────────────┐
-│  Index (once /  │  chunk lib/** + rules → Ollama embeddings
-│  after refactors)│  → agents/pr-reviewer/index/rag.sqlite
+│  Index          │  full rebuild locally, or incremental on merge to main
+│  (RAG sqlite)   │  → agents/pr-reviewer/index/rag.sqlite (committed)
 └────────┬────────┘
          │
          ▼
@@ -69,10 +69,11 @@ So feedback can respect this project’s BLoC layering instead of generic Flutte
 |--------|------|
 | `agents/pr-reviewer/RULES.md` | Project review standards (architecture, tone, output format) |
 | `agents/pr-reviewer/rag_store.py` | Chunking, embeddings, SQLite search |
-| `agents/pr-reviewer/index.py` | Builds/refreshes the vector index |
+| `agents/pr-reviewer/index.py` | Full + incremental SQLite index updates |
 | `agents/pr-reviewer/review.py` | Orchestrates gather → retrieve → review |
-| `rag.sqlite` | Local index (gitignored) |
-| Ollama | Embeddings (`nomic-embed-text`) + chat (`llama3.2`) on your machine |
+| `agents/pr-reviewer/index/rag.sqlite` | Vector index (committed; refreshed on merge to main) |
+| `.github/workflows/rag-index-on-merge.yml` | Incremental re-embed when PRs land on main |
+| Ollama | Embeddings (`nomic-embed-text`) + chat (`llama3.2`) |
 
 ### Setup
 
@@ -82,9 +83,41 @@ ollama serve
 ollama pull llama3.2
 ollama pull nomic-embed-text
 
-# build/refresh vector index (re-run after large refactors)
+# full rebuild (local)
 ./scripts/pr-review-index.sh
 ```
+
+### RAG updates when a PR merges
+
+```
+PR merges into main
+        │
+        ▼
+GitHub Action (push to main)
+        │
+        ▼
+Diff before...after → modified / deleted files only
+        │
+        ▼
+Delete old SQLite chunks for those paths
+        │
+        ▼
+Re-embed updated file content with Ollama
+        │
+        ▼
+Commit agents/pr-reviewer/index/rag.sqlite back to main
+        │
+        ▼
+Future ./scripts/pr-review.sh uses the latest index (after git pull)
+```
+
+Local incremental (same as CI):
+
+```bash
+./scripts/pr-review-index-update.sh --since <before_sha> --until HEAD
+```
+
+Manual full rebuild anytime: `./scripts/pr-review-index.sh`
 
 ### Review
 

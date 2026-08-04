@@ -1,5 +1,7 @@
-# Local RAG index (Ollama embeddings)
-agents/pr-reviewer/index/
+# Local RAG working files — keep committed sqlite for CI/main sync
+agents/pr-reviewer/index/*
+!agents/pr-reviewer/index/rag.sqlite
+!agents/pr-reviewer/index/.gitkeep
 
 # Miscellaneous
 *.class

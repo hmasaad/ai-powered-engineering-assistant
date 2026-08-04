@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import math
 import os
@@ -13,6 +14,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+
 
 AGENT_DIR = Path(__file__).resolve().parent
 ROOT = AGENT_DIR.parents[1]
@@ -139,6 +141,9 @@ def connect(db_path: Path = DEFAULT_DB) -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chunks_path ON chunks(path)"
+    )
     conn.commit()
     return conn
 
@@ -147,6 +152,36 @@ def clear_index(conn: sqlite3.Connection) -> None:
     conn.execute("DELETE FROM chunks")
     conn.execute("DELETE FROM meta")
     conn.commit()
+
+
+def delete_chunks_for_path(conn: sqlite3.Connection, path: str) -> int:
+    cur = conn.execute("DELETE FROM chunks WHERE path = ?", (path,))
+    conn.commit()
+    return int(cur.rowcount or 0)
+
+
+def delete_chunks_for_paths(conn: sqlite3.Connection, paths: list[str]) -> int:
+    removed = 0
+    for path in sorted(set(paths)):
+        removed += delete_chunks_for_path(conn, path)
+    return removed
+
+
+def chunk_count(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()
+    return int(row[0]) if row else 0
+
+
+def indexed_file_count(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(DISTINCT path) FROM chunks").fetchone()
+    return int(row[0]) if row else 0
+
+
+def is_indexable_relpath(rel: str) -> bool:
+    """True if path matches INDEX_GLOBS (posix-style relative path)."""
+    # Path.match does not treat ** like root.glob(); fnmatch does for our patterns.
+    normalized = rel.replace("\\", "/").lstrip("./")
+    return any(fnmatch.fnmatch(normalized, pattern) for pattern in INDEX_GLOBS)
 
 
 def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:

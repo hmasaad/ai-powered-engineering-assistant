@@ -6,13 +6,16 @@ alwaysApply: true
 
 # Local PR Reviewer
 
-Use the local Ollama agent (not Cursor Cloud) to review PRs:
+Use the local Ollama + SQLite RAG agent (not Cursor Cloud) to review PRs:
 
 ```bash
-./scripts/pr-review.sh
+./scripts/pr-review-index.sh   # rebuild index after large refactors
+./scripts/pr-review.sh         # current branch
+./scripts/pr-review.sh --pr 42 # specific GitHub PR
 ```
 
-Rules live in `agents/pr-reviewer/RULES.md`. Keep reviews aligned with the contract-driven BLoC layout:
+Rules: `agents/pr-reviewer/RULES.md`. Index: `agents/pr-reviewer/index/rag.sqlite`.
+Keep reviews aligned with the contract-driven BLoC layout:
 
 - `lib/core/contracts` → Data + Events
 - `lib/blocs` → `BaseBloc` handlers

@@ -1,48 +1,59 @@
-# Local PR Reviewer (Ollama)
+# Local PR Reviewer (Ollama + SQLite RAG)
 
-Reviews git changes on your machine using project rules in `RULES.md`. Does **not** use Cursor Cloud.
+Reviews git changes on your machine using project rules and retrieved code context. Does **not** use Cursor Cloud.
 
 ## Setup
 
-1. Install [Ollama](https://ollama.com)
-2. Start it and pull a model:
-
 ```bash
+# Install Ollama: https://ollama.com
 ollama serve
 ollama pull llama3.2
+ollama pull nomic-embed-text
 ```
 
-Optional stronger models: `llama3.1:8b`, `qwen2.5-coder:7b`, `deepseek-coder-v2`.
-
-## Run
-
-From the repo root:
+## Build / refresh the RAG index
 
 ```bash
+./scripts/pr-review-index.sh
+```
+
+Creates `agents/pr-reviewer/index/rag.sqlite` (gitignored).
+
+## Run a review
+
+```bash
+# current branch vs origin/main
 ./scripts/pr-review.sh
+
+# specific GitHub PR number
+./scripts/pr-review.sh --pr 42
 ```
 
-Or:
+`--pr` fetches `pull/<n>/head` from `origin` (does not change your checkout).  
+If `gh` is installed, it also detects the PR base branch and title.
 
-```bash
-python3 agents/pr-reviewer/review.py --base origin/main --model llama3.2
-```
+If the index is missing, the review script builds it first.
 
-### Useful flags / env
+### Useful options
 
 | Flag / env | Meaning |
 |---|---|
-| `--base origin/main` | Diff base (also `PR_REVIEW_BASE`) |
-| `--model qwen2.5-coder:7b` | Ollama model (also `OLLAMA_MODEL`) |
-| `OLLAMA_HOST` | Default `http://127.0.0.1:11434` |
+| `--pr 42` | Review GitHub PR #42 |
+| `--base origin/main` | Diff base (`PR_REVIEW_BASE`; used when not using `gh` with `--pr`) |
+| `--model llama3.2` | Chat model (`OLLAMA_MODEL`) |
+| `--embed-model nomic-embed-text` | Embed model (`OLLAMA_EMBED_MODEL`) |
+| `--top-k 8` | Retrieved chunks (`PR_REVIEW_TOP_K`) |
+| `--no-rag` | Skip retrieval |
 | `--dry-gather` | Print prompt context only |
 
-## What it does
+## Pipeline
 
-1. Reads `agents/pr-reviewer/RULES.md`
-2. Collects git diff vs base + dirty files
-3. Attaches changed file contents (truncated)
-4. Runs `flutter analyze`
-5. Asks Ollama for a structured review
+1. Read `RULES.md`
+2. Collect git diff + dirty files + `flutter analyze`
+3. Embed a query from changed paths/symbols
+4. Retrieve top chunks from SQLite (cosine similarity)
+5. Ask Ollama for Blockers / Should fix / Nits
 
-Edit `RULES.md` to change review behavior for this project.
+## Edit behavior
+
+Change review standards in `RULES.md`, then re-index if you want rules text in the vector store (rules are always injected directly into the prompt too).

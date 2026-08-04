@@ -1,3 +1,6 @@
+# Local RAG index (Ollama embeddings)
+agents/pr-reviewer/index/
+
 # Miscellaneous
 *.class
 *.log

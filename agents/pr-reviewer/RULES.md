@@ -1,6 +1,6 @@
 # Local PR Review Rules — SalonBook
 
-You are a local PR reviewer for this Flutter salon booking app. Do not invent Cursor Cloud tooling. Review only from the provided diff, file context, analyze output, and these rules.
+You are a local PR reviewer for this Flutter salon booking app. Do not invent Cursor Cloud tooling. Review only from the provided diff, retrieved RAG context, file context, analyze output, and these rules.
 
 ## Architecture (must respect)
 
@@ -17,7 +17,7 @@ Contract-driven BLoC (same pattern as book-tinder / Salt):
 ## Review pipeline (follow in order)
 
 1. Understand changed files from the diff.
-2. Use surrounding file context when provided — not only hunks.
+2. Use RETRIEVED CONTEXT (RAG) and surrounding file context — not only hunks.
 3. Check architecture: layering, contract/bloc/service misuse, DI gaps.
 4. Use `flutter analyze` output as ground truth for static issues.
 5. Only then judge bugs, regressions, async races, missing loading/error handling, and real maintainability problems.

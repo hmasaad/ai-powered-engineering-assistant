@@ -8,8 +8,11 @@ class SalonService {
 
   SalonService(this._salonApi);
 
-  Future<ResponseEntity<List<Salon>>> fetchSalons({String? query}) {
-    return _salonApi.getSalons(query: query);
+  Future<ResponseEntity<List<Salon>>> fetchSalons({
+    String? query,
+    String? tag,
+  }) {
+    return _salonApi.getSalons(query: query, tag: tag);
   }
 
   Future<ResponseEntity<Salon>> fetchSalon(String salonId) {

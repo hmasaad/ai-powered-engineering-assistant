@@ -16,12 +16,23 @@ class SalonApi {
     return _cache!;
   }
 
-  Future<ResponseEntity<List<Salon>>> getSalons({String? query}) async {
+  Future<ResponseEntity<List<Salon>>> getSalons({
+    String? query,
+    String? tag,
+  }) async {
     try {
       final data = await _load();
       var salons = (data['salons'] as List<dynamic>)
           .map((e) => Salon.fromJson(e as Map<String, dynamic>))
           .toList();
+      if (tag != null && tag.trim().isNotEmpty) {
+        final selected = tag.toLowerCase();
+        salons = salons
+            .where(
+              (s) => s.tags.any((t) => t.toLowerCase() == selected),
+            )
+            .toList();
+      }
       if (query != null && query.trim().isNotEmpty) {
         final q = query.toLowerCase();
         salons = salons

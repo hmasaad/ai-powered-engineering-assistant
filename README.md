@@ -94,11 +94,20 @@ ollama pull nomic-embed-text
 
 # specific GitHub PR (fetches pull/<n>/head; does not change your checkout)
 ./scripts/pr-review.sh --pr 42
-
-# inspect gathered context without calling the chat model
-./scripts/pr-review.sh --pr 42 --dry-gather
 ```
 
-Useful flags: `--base`, `--model`, `--embed-model`, `--top-k`, `--no-rag`.
+When the review finishes, it writes a **coverage-style HTML report** (committed under `agents/pr-reviewer/reports/`) and opens it:
 
-More detail: `agents/pr-reviewer/README.md`
+```
+agents/pr-reviewer/reports/
+  index.html          # dashboard of all reviewed PRs
+  pr-42/index.html    # this PR’s visual review (overwritten on each run)
+  pr-42/report.json
+  latest/index.html   # most recent run
+```
+
+Same idea as bloc coverage (`flutter test --coverage` → `genhtml` → open HTML):
+each `./scripts/pr-review.sh --pr N` refreshes that PR’s report until you stop
+running it (typically until the PR is merged).
+
+Useful flags: `--base`, `--model`, `--embed-model`, `--top-k`, `--no-rag`, `--no-open`.

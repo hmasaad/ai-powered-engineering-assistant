@@ -25,6 +25,7 @@ from rag_store import (  # noqa: E402
     format_hits,
     search,
 )
+from report import normalize_report, write_report  # noqa: E402
 
 RULES_PATH = AGENT_DIR / "RULES.md"
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
@@ -322,12 +323,14 @@ def ollama_chat(model: str, prompt: str) -> str:
     body = {
         "model": model,
         "stream": False,
+        "format": "json",
         "messages": [
             {
                 "role": "system",
                 "content": (
                     "You are a strict but fair local PR reviewer. "
-                    "Follow the provided RULES and output format. "
+                    "Return ONLY valid JSON matching the RULES output schema. "
+                    "No markdown fences. No rewritten source files. "
                     "Ground findings in DIFF, RETRIEVED CONTEXT, and ANALYZE."
                 ),
             },
@@ -407,6 +410,11 @@ def main() -> int:
         action="store_true",
         help="Print gathered context only; do not call chat model",
     )
+    parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Do not open the HTML report in a browser",
+    )
     args = parser.parse_args()
 
     if not RULES_PATH.is_file():
@@ -419,6 +427,7 @@ def main() -> int:
     include_dirty = True
     file_ref: str | None = None
     target_label = "current branch / working tree"
+    pr_number = args.pr
 
     if args.pr is not None:
         print(f"Fetching PR #{args.pr} from origin...", file=sys.stderr)
@@ -460,6 +469,20 @@ def main() -> int:
     print(f"Reviewing with Ollama model '{args.model}'...", file=sys.stderr)
     review = ollama_chat(args.model, prompt)
     print(review)
+
+    report = normalize_report(
+        pr=pr_number,
+        label=target_label,
+        base=base,
+        head=head,
+        model=args.model,
+        changed_files=paths,
+        analyze_text=analyze,
+        review_text=review,
+    )
+    html_path = write_report(report, open_browser=not args.no_open)
+    print(f"\nHTML report: {html_path}", file=sys.stderr)
+    print(f"Dashboard: {html_path.parent.parent / 'index.html'}", file=sys.stderr)
     return 0
 
 

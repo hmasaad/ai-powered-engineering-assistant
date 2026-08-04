@@ -32,6 +32,20 @@ Creates `agents/pr-reviewer/index/rag.sqlite` (gitignored).
 `--pr` fetches `pull/<n>/head` from `origin` (does not change your checkout).  
 If `gh` is installed, it also detects the PR base branch and title.
 
+### Visual report (like coverage HTML)
+
+After each successful run the script generates:
+
+| Path | Purpose |
+|------|---------|
+| `agents/pr-reviewer/reports/pr-<n>/index.html` | Visual review for that PR |
+| `agents/pr-reviewer/reports/pr-<n>/report.json` | Structured findings |
+| `agents/pr-reviewer/reports/index.html` | Dashboard of all PR reports |
+| `agents/pr-reviewer/reports/latest/` | Shortcut to the most recent run |
+
+On macOS it runs `open …/index.html` automatically (skip with `--no-open`).  
+Re-running `--pr 42` **overwrites** that PR’s report until the PR is merged / you stop reviewing it.
+
 If the index is missing, the review script builds it first.
 
 ### Useful options
@@ -44,6 +58,7 @@ If the index is missing, the review script builds it first.
 | `--embed-model nomic-embed-text` | Embed model (`OLLAMA_EMBED_MODEL`) |
 | `--top-k 8` | Retrieved chunks (`PR_REVIEW_TOP_K`) |
 | `--no-rag` | Skip retrieval |
+| `--no-open` | Don’t open the HTML report |
 | `--dry-gather` | Print prompt context only |
 
 ## Pipeline

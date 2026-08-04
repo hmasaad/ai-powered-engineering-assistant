@@ -26,27 +26,30 @@ Contract-driven BLoC (same pattern as book-tinder / Salt):
 
 - Prefer actionable, file-scoped findings with path + reason.
 - Skip speculative nitpicks and style-only noise unless it breaks project conventions.
+- Do **not** rewrite entire widgets or paste large replacement code.
+- Respect Dart null-safety: do not invent nullability that the types do not allow.
 - If uncertain, say what you checked and what is still unclear.
 - Summarize only what matters. Tone: direct and constructive.
-- Separate findings into: **Blockers**, **Should fix**, **Nits** (optional).
 
-## Output format
+## Output format (required)
 
-```markdown
-## Summary
-<1-3 sentences>
+Respond with **only** a single JSON object (no markdown fences, no prose outside JSON):
 
-## Blockers
-- `path`: ...
-
-## Should fix
-- `path`: ...
-
-## Nits
-- `path`: ...
-
-## Analyze notes
-<relevant flutter analyze items, or "none">
+```json
+{
+  "summary": "1-3 sentences",
+  "findings": [
+    {
+      "severity": "blocker | should_fix | nit",
+      "file": "lib/path/to/file.dart",
+      "line": 120,
+      "title": "Short title",
+      "detail": "Concrete issue and why it matters",
+      "evidence": "What in the diff/RAG/analyze supports this"
+    }
+  ],
+  "analyze": "Relevant flutter analyze notes, or none"
+}
 ```
 
-If there are no issues in a section, write `None`.
+If there are no findings, use `"findings": []`.

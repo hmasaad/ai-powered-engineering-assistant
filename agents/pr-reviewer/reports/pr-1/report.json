@@ -4,8 +4,18 @@
   "base": "origin/main",
   "head": "refs/pr-review/1",
   "model": "llama3.2",
-  "generated_at": "2026-08-04T11:52:33.015901+00:00",
+  "generated_at": "2026-08-04T12:00:39.114350+00:00",
   "changed_files": [
+    "README.md",
+    "agents/pr-reviewer/README.md",
+    "agents/pr-reviewer/RULES.md",
+    "agents/pr-reviewer/report.py",
+    "agents/pr-reviewer/reports/index.html",
+    "agents/pr-reviewer/reports/latest/index.html",
+    "agents/pr-reviewer/reports/latest/report.json",
+    "agents/pr-reviewer/reports/pr-1/index.html",
+    "agents/pr-reviewer/reports/pr-1/report.json",
+    "agents/pr-reviewer/reports/pr-1/review.md",
     "agents/pr-reviewer/review.py",
     "lib/api/salon_api.dart",
     "lib/blocs/salon_list_bloc.dart",
@@ -21,7 +31,11 @@
     "blockers": 0,
     "should_fix": 0,
     "nits": 0,
-    "total": 0
+    "total": 0,
+    "valid": 0,
+    "partial": 0,
+    "noise": 0,
+    "unchecked": 0
   },
-  "raw_markdown": "{\n  \"name\": \"BookingService\",\n  \"description\": \"A service for booking salons and services.\",\n  \"type\": \"class\",\n  \"properties\": {\n    \"_bookingApi\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"getBookings\": {\n          \"type\": \"function\"\n        },\n        \"createBooking\": {\n          \"type\": \"function\"\n        },\n        \"cancelBooking\": {\n          \"type\": \"function\"\n        }\n      }\n    }\n  }\n}"
+  "raw_markdown": "{\n  \"name\": \"SalonListScreen\",\n  \"type\": \"class\",\n  \"children\": [\n    {\n      \"name\": \"_SalonCard\",\n      \"type\": \"class\",\n      \"children\": []\n    },\n    {\n      \"name\": \"_TagFilterRow\",\n      \"type\": \"class\",\n      \"children\": []\n    }\n  ]\n}"
 }

@@ -21,6 +21,17 @@ Contract-driven BLoC (same pattern as book-tinder / Salt):
 3. Check architecture: layering, contract/bloc/service misuse, DI gaps.
 4. Use `flutter analyze` output as ground truth for static issues.
 5. Only then judge bugs, regressions, async races, missing loading/error handling, and real maintainability problems.
+6. For every finding, assign a **triage verdict** (see below).
+
+## Severity vs triage verdict
+
+- **severity** = how serious the issue would be *if true* (`blocker` | `should_fix` | `nit`)
+- **verdict** = whether the finding is actually useful for *this* PR:
+  - `valid` — real issue backed by diff / architecture / analyze
+  - `partial` — soft/optional polish; not a true defect
+  - `noise` — wrong, speculative, or conflicts with typed Dart / existing patterns (do not invent nullability)
+
+Prefer emitting only `valid` and occasional `partial` findings. If something is `noise`, omit it unless you need to call out a false alarm explicitly.
 
 ## Comment standards
 
@@ -41,11 +52,13 @@ Respond with **only** a single JSON object (no markdown fences, no prose outside
   "findings": [
     {
       "severity": "blocker | should_fix | nit",
+      "verdict": "valid | partial | noise",
       "file": "lib/path/to/file.dart",
       "line": 120,
       "title": "Short title",
       "detail": "Concrete issue and why it matters",
-      "evidence": "What in the diff/RAG/analyze supports this"
+      "evidence": "What in the diff/RAG/analyze supports this",
+      "verdict_reason": "Why this triage verdict"
     }
   ],
   "analyze": "Relevant flutter analyze notes, or none"

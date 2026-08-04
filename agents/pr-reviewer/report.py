@@ -168,9 +168,24 @@ def normalize_report(
             severity = "should_fix"
         else:
             severity = "nit"
+
+        verdict = str(item.get("verdict", "unchecked")).lower().strip()
+        if verdict in {"valid", "true", "real"}:
+            verdict = "valid"
+        elif verdict in {"partial", "soft", "optional"}:
+            verdict = "partial"
+        elif verdict in {"noise", "false", "invalid", "reject"}:
+            verdict = "noise"
+        else:
+            verdict = "unchecked"
+
         findings.append(
             {
                 "severity": severity,
+                "verdict": verdict,
+                "verdict_reason": item.get("verdict_reason")
+                or item.get("why")
+                or "",
                 "file": item.get("file") or "",
                 "line": item.get("line"),
                 "title": item.get("title") or item.get("detail") or "Finding",
@@ -182,6 +197,10 @@ def normalize_report(
     blockers = sum(1 for f in findings if f["severity"] == "blocker")
     should_fix = sum(1 for f in findings if f["severity"] == "should_fix")
     nits = sum(1 for f in findings if f["severity"] == "nit")
+    valid = sum(1 for f in findings if f["verdict"] == "valid")
+    partial = sum(1 for f in findings if f["verdict"] == "partial")
+    noise = sum(1 for f in findings if f["verdict"] == "noise")
+    unchecked = sum(1 for f in findings if f["verdict"] == "unchecked")
 
     return {
         "pr": pr,
@@ -199,6 +218,10 @@ def normalize_report(
             "should_fix": should_fix,
             "nits": nits,
             "total": len(findings),
+            "valid": valid,
+            "partial": partial,
+            "noise": noise,
+            "unchecked": unchecked,
         },
         "raw_markdown": parsed.get("raw_markdown") or review_text,
     }
@@ -206,16 +229,20 @@ def normalize_report(
 
 def _finding_rows(findings: list[dict[str, Any]]) -> str:
     if not findings:
-        return "<tr><td colspan='4'>No findings.</td></tr>"
+        return "<tr><td colspan='5'>No findings.</td></tr>"
     rows = []
     for f in findings:
         sev = _esc(f["severity"])
+        verdict = _esc(f.get("verdict") or "unchecked")
         loc = _esc(f["file"] or "—")
         if f.get("line"):
             loc = f"{loc}:{_esc(f['line'])}"
+        reason = _esc(f.get("verdict_reason") or "—")
         rows.append(
-            f"<tr class='sev-{sev}'>"
+            f"<tr class='sev-{sev} verdict-{verdict}'>"
             f"<td><span class='pill {sev}'>{sev}</span></td>"
+            f"<td><span class='pill verdict {verdict}'>{verdict}</span>"
+            f"<div class='muted'>{reason}</div></td>"
             f"<td><code>{loc}</code></td>"
             f"<td><strong>{_esc(f['title'])}</strong>"
             f"<div class='muted'>{_esc(f['detail'])}</div></td>"
@@ -225,53 +252,62 @@ def _finding_rows(findings: list[dict[str, Any]]) -> str:
     return "\n".join(rows)
 
 
+def _analyze_status(analyze_text: str) -> tuple[str, str]:
+    """Return (label, css_class) for flutter analyze status."""
+    text = (analyze_text or "").strip().lower()
+    if not text or text == "none":
+        return "No analyze notes", "neutral"
+    if "no issues found" in text or "error •" not in text and "warning •" not in text and "failed" not in text:
+        if "error" in text or "failed" in text or "version solving failed" in text:
+            return "Analyze problems", "danger"
+        return "Analyze clean / notes only", "ok"
+    if "error" in text or "failed" in text:
+        return "Analyze problems", "danger"
+    if "warning" in text:
+        return "Analyze warnings", "warn"
+    return "Analyze notes available", "neutral"
+
+
 def _findings_board(findings: list[dict[str, Any]]) -> str:
     if not findings:
         return "<div class='card muted'>No findings.</div>"
     cards = []
     for f in findings:
         sev = _esc(f["severity"])
-        loc = _esc(f["file"] or "—")
-        if f.get("line"):
-            loc = f"{loc}:{_esc(f['line'])}"
+        verdict = _esc(f.get("verdict") or "unchecked")
+        path = _esc(f["file"] or "—")
+        line = _esc(f["line"]) if f.get("line") not in (None, "") else "—"
+        claim = _esc(f.get("detail") or f.get("title") or "—")
         cards.append(
             "<article class='finding-card'>"
             f"<div class='finding-head'>"
-            f"<strong>{_esc(f['title'])}</strong>"
+            f"<strong>{_esc(f.get('title') or 'Finding')}</strong>"
+            f"<span class='pills'>"
             f"<span class='pill {sev}'>{sev}</span>"
+            f"<span class='pill verdict {verdict}'>{verdict}</span>"
+            f"</span>"
             f"</div>"
-            f"<p class='muted claim'>{_esc(f['detail'] or '—')}</p>"
-            f"<div class='finding-meta'><code>{loc}</code></div>"
-            f"<p><span class='label'>Evidence</span> "
-            f"{_esc(f.get('evidence') or '—')}</p>"
+            "<dl class='finding-grid'>"
+            f"<div><dt>File</dt><dd><code>{path}</code></dd></div>"
+            f"<div><dt>Line</dt><dd><code>{line}</code></dd></div>"
+            f"<div class='span-2'><dt>Claim</dt><dd>{claim}</dd></div>"
+            f"<div><dt>Severity</dt><dd><span class='pill {sev}'>{sev}</span></dd></div>"
+            f"<div><dt>Triage verdict</dt><dd><span class='pill verdict {verdict}'>{verdict}</span>"
+            f"<div class='muted'>{_esc(f.get('verdict_reason') or '—')}</div></dd></div>"
+            f"<div class='span-2'><dt>Evidence</dt><dd>{_esc(f.get('evidence') or '—')}</dd></div>"
+            "</dl>"
             "</article>"
         )
     return "<div class='board'>" + "\n".join(cards) + "</div>"
 
 
-def _recommended_layout_section() -> str:
-    return """
-    <h2>Recommended visual layout for future reviews</h2>
-    <p class="muted">Prefer a structured report over free-form prose + full rewritten widgets.</p>
-    <table>
-      <thead>
-        <tr><th>Section</th><th>What to show</th><th>Why</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Header</td><td>PR number, branch, model, analyze status</td><td>Instant context</td></tr>
-        <tr><td>Score strip</td><td>Blockers / Should fix / Nits</td><td>Scan severity first</td></tr>
-        <tr><td>Findings board</td><td>file · line · claim · evidence</td><td>Actionable and scannable</td></tr>
-        <tr><td>Analyze notes</td><td>flutter analyze items only</td><td>Ground truth vs speculation</td></tr>
-        <tr><td>Skip</td><td>Full rewritten widget dumps</td><td>Hard to review; often invents APIs</td></tr>
-      </tbody>
-    </table>
-"""
-
-
 def render_pr_html(report: dict[str, Any]) -> str:
     counts = report["counts"]
-    files = "".join(f"<li><code>{_esc(p)}</code></li>" for p in report["changed_files"])
     pr_label = f"PR #{report['pr']}" if report.get("pr") is not None else "Local branch"
+    analyze_text = str(report.get("analyze") or "none")
+    analyze_label, analyze_tone = _analyze_status(analyze_text)
+    branch = f"{report.get('base', '')}...{report.get('head', '')}"
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -300,31 +336,45 @@ def render_pr_html(report: dict[str, Any]) -> str:
     }}
     main {{ max-width: 980px; margin: 0 auto; padding: 28px 20px 48px; }}
     h1 {{ margin: 0 0 6px; font-size: 28px; }}
-    h2 {{ margin: 28px 0 12px; font-size: 18px; }}
+    h2 {{ margin: 28px 0 8px; font-size: 18px; }}
+    .section-why {{ color: var(--muted); font-size: 13px; margin: 0 0 12px; }}
     .muted {{ color: var(--muted); }}
     .grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }}
-    .stat, .card {{
+    .grid-3 {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }}
+    .stat, .card, .header-card {{
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 14px 16px;
     }}
+    .header-card dl {{
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 8px 12px;
+      margin: 0;
+    }}
+    .header-card dt {{ color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; }}
+    .header-card dd {{ margin: 0; }}
     .stat .value {{ font-size: 28px; font-weight: 700; }}
     .stat .label {{ color: var(--muted); font-size: 13px; }}
     .value.danger {{ color: var(--danger); }}
     .value.warn {{ color: var(--warn); }}
     .value.ok {{ color: var(--ok); }}
-    table {{ width: 100%; border-collapse: collapse; background: var(--card);
-      border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }}
-    th, td {{ text-align: left; padding: 12px; vertical-align: top;
-      border-bottom: 1px solid var(--border); font-size: 14px; }}
-    th {{ background: #fafaf9; color: var(--muted); font-weight: 600; }}
+    .status.ok {{ color: var(--ok); font-weight: 600; }}
+    .status.warn {{ color: var(--warn); font-weight: 600; }}
+    .status.danger {{ color: var(--danger); font-weight: 600; }}
+    .status.neutral {{ color: var(--muted); font-weight: 600; }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }}
     .pill {{ display: inline-block; padding: 2px 8px; border-radius: 999px;
       font-size: 12px; font-weight: 600; background: #f5f5f4; }}
     .pill.blocker {{ background: #fee2e2; color: var(--danger); }}
     .pill.should_fix {{ background: #ffedd5; color: var(--warn); }}
     .pill.nit {{ background: #e7e5e4; color: #44403c; }}
+    .pill.verdict.valid {{ background: #d1fae5; color: var(--ok); }}
+    .pill.verdict.partial {{ background: #ffedd5; color: var(--warn); }}
+    .pill.verdict.noise {{ background: #fee2e2; color: var(--danger); }}
+    .pill.verdict.unchecked {{ background: #e7e5e4; color: #44403c; }}
+    .pills {{ display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }}
     .board {{ display: grid; gap: 12px; }}
     .finding-card {{
       background: var(--card);
@@ -334,13 +384,21 @@ def render_pr_html(report: dict[str, Any]) -> str:
     }}
     .finding-head {{
       display: flex; justify-content: space-between; gap: 12px;
-      align-items: center; margin-bottom: 8px;
+      align-items: center; margin-bottom: 12px;
     }}
-    .finding-meta {{ margin: 8px 0; }}
-    .claim {{ margin: 0 0 4px; }}
-    .label {{ font-weight: 600; color: var(--muted); font-size: 12px;
-      text-transform: uppercase; letter-spacing: 0.02em; margin-right: 6px; }}
-    ul {{ padding-left: 18px; }}
+    .finding-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      margin: 0;
+    }}
+    .finding-grid .span-2 {{ grid-column: 1 / -1; }}
+    .finding-grid dt {{
+      color: var(--muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.02em; margin-bottom: 2px;
+    }}
+    .finding-grid dd {{ margin: 0; }}
+    .triage-note {{ margin-top: 10px; font-size: 13px; color: var(--muted); }}
     pre {{
       white-space: pre-wrap;
       background: #fff;
@@ -349,57 +407,76 @@ def render_pr_html(report: dict[str, Any]) -> str:
       padding: 14px;
       font-size: 12px;
     }}
+    details.raw {{
+      margin-top: 28px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+    }}
     a {{ color: var(--accent); }}
     @media (max-width: 720px) {{
-      .grid {{ grid-template-columns: 1fr 1fr; }}
+      .grid, .grid-3, .finding-grid, .header-card dl {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
 <body>
   <main>
     <p class="muted"><a href="../index.html">All PR reviews</a></p>
-    <h1>{_esc(pr_label)} review</h1>
-    <p class="muted">{_esc(report.get("label") or "")}</p>
-    <p class="muted">
-      {_esc(report["base"])}...{_esc(report["head"])}
-      · model {_esc(report["model"])}
-      · {_esc(report["generated_at"])}
-    </p>
 
-    <div class="grid" style="margin-top: 18px;">
-      <div class="stat"><div class="value">{counts["total"]}</div><div class="label">Total findings</div></div>
-      <div class="stat"><div class="value danger">{counts["blockers"]}</div><div class="label">Blockers</div></div>
-      <div class="stat"><div class="value warn">{counts["should_fix"]}</div><div class="label">Should fix</div></div>
-      <div class="stat"><div class="value ok">{counts["nits"]}</div><div class="label">Nits</div></div>
-    </div>
+    <section>
+      <h2>Header</h2>
+      <p class="section-why">PR number, branch, model, analyze status — instant context</p>
+      <div class="header-card">
+        <dl>
+          <dt>PR</dt><dd><strong>{_esc(pr_label)}</strong></dd>
+          <dt>Branch / range</dt><dd><code>{_esc(branch)}</code></dd>
+          <dt>Label</dt><dd>{_esc(report.get("label") or "—")}</dd>
+          <dt>Model</dt><dd><code>{_esc(report.get("model") or "—")}</code></dd>
+          <dt>Analyze status</dt>
+          <dd><span class="status {analyze_tone}">{_esc(analyze_label)}</span></dd>
+          <dt>Generated</dt><dd class="muted">{_esc(report.get("generated_at") or "—")}</dd>
+          <dt>Summary</dt><dd>{_esc(report.get("summary") or "—")}</dd>
+        </dl>
+      </div>
+    </section>
 
-    <h2>Summary</h2>
-    <div class="card">{_esc(report["summary"])}</div>
+    <section>
+      <h2>Score strip</h2>
+      <p class="section-why">Blockers / Should fix / Nits + triage (valid / partial / noise) — scan severity and usefulness</p>
+      <div class="grid">
+        <div class="stat"><div class="value danger">{counts["blockers"]}</div><div class="label">Blockers</div></div>
+        <div class="stat"><div class="value warn">{counts["should_fix"]}</div><div class="label">Should fix</div></div>
+        <div class="stat"><div class="value ok">{counts["nits"]}</div><div class="label">Nits</div></div>
+        <div class="stat"><div class="value">{counts["total"]}</div><div class="label">Total findings</div></div>
+      </div>
+      <div class="grid-3" style="margin-top: 12px;">
+        <div class="stat"><div class="value ok">{counts.get("valid", 0)}</div><div class="label">Triage: valid</div></div>
+        <div class="stat"><div class="value warn">{counts.get("partial", 0)}</div><div class="label">Triage: partial</div></div>
+        <div class="stat"><div class="value danger">{counts.get("noise", 0)}</div><div class="label">Triage: noise</div></div>
+      </div>
+      <p class="triage-note">
+        <strong>Severity</strong> = how serious if true.
+        <strong>Triage verdict</strong> = whether the finding is useful for this PR.
+      </p>
+    </section>
 
-    <h2>Findings board</h2>
-    <p class="muted">Each card is one claim from the model, with severity and evidence.</p>
-    {_findings_board(report["findings"])}
+    <section>
+      <h2>Findings board</h2>
+      <p class="section-why">file · line · claim · severity · triage verdict · evidence — actionable and scannable</p>
+      {_findings_board(report["findings"])}
+    </section>
 
-    <h2>Findings table</h2>
-    <table>
-      <thead>
-        <tr><th>Severity</th><th>Location</th><th>Finding</th><th>Evidence</th></tr>
-      </thead>
-      <tbody>
-        {_finding_rows(report["findings"])}
-      </tbody>
-    </table>
+    <section>
+      <h2>Analyze notes</h2>
+      <p class="section-why">flutter analyze items only — ground truth vs speculation</p>
+      <pre>{_esc(analyze_text)}</pre>
+    </section>
 
-    {_recommended_layout_section()}
-
-    <h2>Changed files</h2>
-    <div class="card"><ul>{files or "<li>None</li>"}</ul></div>
-
-    <h2>Analyze notes</h2>
-    <pre>{_esc(report.get("analyze") or "none")}</pre>
-
-    <h2>Raw model output</h2>
-    <pre>{_esc(report.get("raw_markdown") or "")}</pre>
+    <details class="raw">
+      <summary class="muted">Raw model output (optional)</summary>
+      <pre>{_esc(report.get("raw_markdown") or "")}</pre>
+    </details>
   </main>
 </body>
 </html>
@@ -464,6 +541,23 @@ def render_index_html(reports: list[dict[str, Any]]) -> str:
 
 def write_report(report: dict[str, Any], *, open_browser: bool = True) -> Path:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Backfill triage fields for older report.json files
+    findings = report.get("findings") or []
+    for finding in findings:
+        if not finding.get("verdict"):
+            finding["verdict"] = "unchecked"
+        finding.setdefault("verdict_reason", "")
+    counts = report.setdefault("counts", {})
+    counts.setdefault("total", len(findings))
+    counts.setdefault("blockers", sum(1 for f in findings if f.get("severity") == "blocker"))
+    counts.setdefault("should_fix", sum(1 for f in findings if f.get("severity") == "should_fix"))
+    counts.setdefault("nits", sum(1 for f in findings if f.get("severity") == "nit"))
+    counts["valid"] = sum(1 for f in findings if f.get("verdict") == "valid")
+    counts["partial"] = sum(1 for f in findings if f.get("verdict") == "partial")
+    counts["noise"] = sum(1 for f in findings if f.get("verdict") == "noise")
+    counts["unchecked"] = sum(1 for f in findings if f.get("verdict") == "unchecked")
+
     pr = report.get("pr")
     folder = REPORTS_DIR / (f"pr-{pr}" if pr is not None else "local")
     folder.mkdir(parents=True, exist_ok=True)

@@ -26,31 +26,45 @@
     }
     main { max-width: 980px; margin: 0 auto; padding: 28px 20px 48px; }
     h1 { margin: 0 0 6px; font-size: 28px; }
-    h2 { margin: 28px 0 12px; font-size: 18px; }
+    h2 { margin: 28px 0 8px; font-size: 18px; }
+    .section-why { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
     .muted { color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-    .stat, .card {
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat, .card, .header-card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 14px 16px;
     }
+    .header-card dl {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 8px 12px;
+      margin: 0;
+    }
+    .header-card dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; }
+    .header-card dd { margin: 0; }
     .stat .value { font-size: 28px; font-weight: 700; }
     .stat .label { color: var(--muted); font-size: 13px; }
     .value.danger { color: var(--danger); }
     .value.warn { color: var(--warn); }
     .value.ok { color: var(--ok); }
-    table { width: 100%; border-collapse: collapse; background: var(--card);
-      border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-    th, td { text-align: left; padding: 12px; vertical-align: top;
-      border-bottom: 1px solid var(--border); font-size: 14px; }
-    th { background: #fafaf9; color: var(--muted); font-weight: 600; }
+    .status.ok { color: var(--ok); font-weight: 600; }
+    .status.warn { color: var(--warn); font-weight: 600; }
+    .status.danger { color: var(--danger); font-weight: 600; }
+    .status.neutral { color: var(--muted); font-weight: 600; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     .pill { display: inline-block; padding: 2px 8px; border-radius: 999px;
       font-size: 12px; font-weight: 600; background: #f5f5f4; }
     .pill.blocker { background: #fee2e2; color: var(--danger); }
     .pill.should_fix { background: #ffedd5; color: var(--warn); }
     .pill.nit { background: #e7e5e4; color: #44403c; }
+    .pill.verdict.valid { background: #d1fae5; color: var(--ok); }
+    .pill.verdict.partial { background: #ffedd5; color: var(--warn); }
+    .pill.verdict.noise { background: #fee2e2; color: var(--danger); }
+    .pill.verdict.unchecked { background: #e7e5e4; color: #44403c; }
+    .pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .board { display: grid; gap: 12px; }
     .finding-card {
       background: var(--card);
@@ -60,13 +74,21 @@
     }
     .finding-head {
       display: flex; justify-content: space-between; gap: 12px;
-      align-items: center; margin-bottom: 8px;
+      align-items: center; margin-bottom: 12px;
     }
-    .finding-meta { margin: 8px 0; }
-    .claim { margin: 0 0 4px; }
-    .label { font-weight: 600; color: var(--muted); font-size: 12px;
-      text-transform: uppercase; letter-spacing: 0.02em; margin-right: 6px; }
-    ul { padding-left: 18px; }
+    .finding-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      margin: 0;
+    }
+    .finding-grid .span-2 { grid-column: 1 / -1; }
+    .finding-grid dt {
+      color: var(--muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.02em; margin-bottom: 2px;
+    }
+    .finding-grid dd { margin: 0; }
+    .triage-note { margin-top: 10px; font-size: 13px; color: var(--muted); }
     pre {
       white-space: pre-wrap;
       background: #fff;
@@ -75,69 +97,70 @@
       padding: 14px;
       font-size: 12px;
     }
+    details.raw {
+      margin-top: 28px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+    }
     a { color: var(--accent); }
     @media (max-width: 720px) {
-      .grid { grid-template-columns: 1fr 1fr; }
+      .grid, .grid-3, .finding-grid, .header-card dl { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <main>
     <p class="muted"><a href="../index.html">All PR reviews</a></p>
-    <h1>PR #1 review</h1>
-    <p class="muted">PR #1</p>
-    <p class="muted">
-      origin/main...refs/pr-review/1
-      · model llama3.2
-      · 2026-08-04T11:52:33.015901+00:00
-    </p>
 
-    <div class="grid" style="margin-top: 18px;">
-      <div class="stat"><div class="value">0</div><div class="label">Total findings</div></div>
-      <div class="stat"><div class="value danger">0</div><div class="label">Blockers</div></div>
-      <div class="stat"><div class="value warn">0</div><div class="label">Should fix</div></div>
-      <div class="stat"><div class="value ok">0</div><div class="label">Nits</div></div>
-    </div>
+    <section>
+      <h2>Header</h2>
+      <p class="section-why">PR number, branch, model, analyze status — instant context</p>
+      <div class="header-card">
+        <dl>
+          <dt>PR</dt><dd><strong>PR #1</strong></dd>
+          <dt>Branch / range</dt><dd><code>origin/main...refs/pr-review/1</code></dd>
+          <dt>Label</dt><dd>PR #1</dd>
+          <dt>Model</dt><dd><code>llama3.2</code></dd>
+          <dt>Analyze status</dt>
+          <dd><span class="status danger">Analyze problems</span></dd>
+          <dt>Generated</dt><dd class="muted">2026-08-04T12:00:39.114350+00:00</dd>
+          <dt>Summary</dt><dd>No summary provided.</dd>
+        </dl>
+      </div>
+    </section>
 
-    <h2>Summary</h2>
-    <div class="card">No summary provided.</div>
+    <section>
+      <h2>Score strip</h2>
+      <p class="section-why">Blockers / Should fix / Nits + triage (valid / partial / noise) — scan severity and usefulness</p>
+      <div class="grid">
+        <div class="stat"><div class="value danger">0</div><div class="label">Blockers</div></div>
+        <div class="stat"><div class="value warn">0</div><div class="label">Should fix</div></div>
+        <div class="stat"><div class="value ok">0</div><div class="label">Nits</div></div>
+        <div class="stat"><div class="value">0</div><div class="label">Total findings</div></div>
+      </div>
+      <div class="grid-3" style="margin-top: 12px;">
+        <div class="stat"><div class="value ok">0</div><div class="label">Triage: valid</div></div>
+        <div class="stat"><div class="value warn">0</div><div class="label">Triage: partial</div></div>
+        <div class="stat"><div class="value danger">0</div><div class="label">Triage: noise</div></div>
+      </div>
+      <p class="triage-note">
+        <strong>Severity</strong> = how serious if true.
+        <strong>Triage verdict</strong> = whether the finding is useful for this PR.
+      </p>
+    </section>
 
-    <h2>Findings board</h2>
-    <p class="muted">Each card is one claim from the model, with severity and evidence.</p>
-    <div class='card muted'>No findings.</div>
+    <section>
+      <h2>Findings board</h2>
+      <p class="section-why">file · line · claim · severity · triage verdict · evidence — actionable and scannable</p>
+      <div class='card muted'>No findings.</div>
+    </section>
 
-    <h2>Findings table</h2>
-    <table>
-      <thead>
-        <tr><th>Severity</th><th>Location</th><th>Finding</th><th>Evidence</th></tr>
-      </thead>
-      <tbody>
-        <tr><td colspan='4'>No findings.</td></tr>
-      </tbody>
-    </table>
-
-    
-    <h2>Recommended visual layout for future reviews</h2>
-    <p class="muted">Prefer a structured report over free-form prose + full rewritten widgets.</p>
-    <table>
-      <thead>
-        <tr><th>Section</th><th>What to show</th><th>Why</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Header</td><td>PR number, branch, model, analyze status</td><td>Instant context</td></tr>
-        <tr><td>Score strip</td><td>Blockers / Should fix / Nits</td><td>Scan severity first</td></tr>
-        <tr><td>Findings board</td><td>file · line · claim · evidence</td><td>Actionable and scannable</td></tr>
-        <tr><td>Analyze notes</td><td>flutter analyze items only</td><td>Ground truth vs speculation</td></tr>
-        <tr><td>Skip</td><td>Full rewritten widget dumps</td><td>Hard to review; often invents APIs</td></tr>
-      </tbody>
-    </table>
-
-
-    <h2>Changed files</h2>
-    <div class="card"><ul><li><code>agents/pr-reviewer/review.py</code></li><li><code>lib/api/salon_api.dart</code></li><li><code>lib/blocs/salon_list_bloc.dart</code></li><li><code>lib/core/contracts/salon_list_contract.dart</code></li><li><code>lib/res/strings.dart</code></li><li><code>lib/services/salon_service.dart</code></li><li><code>lib/ui/home/salon_list_screen.dart</code></li></ul></div>
-
-    <h2>Analyze notes</h2>
-    <pre>Resolving dependencies...
+    <section>
+      <h2>Analyze notes</h2>
+      <p class="section-why">flutter analyze items only — ground truth vs speculation</p>
+      <pre>Resolving dependencies...
 The current Dart SDK version is 3.4.1.
 
 Because salon_booking requires SDK version ^3.7.0, version solving failed.
@@ -145,29 +168,27 @@ Because salon_booking requires SDK version ^3.7.0, version solving failed.
 
 You can try the following suggestion to make the pubspec resolve:
 * Try using the Flutter SDK version: 3.44.8.</pre>
+    </section>
 
-    <h2>Raw model output</h2>
-    <pre>{
-  &quot;name&quot;: &quot;BookingService&quot;,
-  &quot;description&quot;: &quot;A service for booking salons and services.&quot;,
+    <details class="raw">
+      <summary class="muted">Raw model output (optional)</summary>
+      <pre>{
+  &quot;name&quot;: &quot;SalonListScreen&quot;,
   &quot;type&quot;: &quot;class&quot;,
-  &quot;properties&quot;: {
-    &quot;_bookingApi&quot;: {
-      &quot;type&quot;: &quot;object&quot;,
-      &quot;properties&quot;: {
-        &quot;getBookings&quot;: {
-          &quot;type&quot;: &quot;function&quot;
-        },
-        &quot;createBooking&quot;: {
-          &quot;type&quot;: &quot;function&quot;
-        },
-        &quot;cancelBooking&quot;: {
-          &quot;type&quot;: &quot;function&quot;
-        }
-      }
+  &quot;children&quot;: [
+    {
+      &quot;name&quot;: &quot;_SalonCard&quot;,
+      &quot;type&quot;: &quot;class&quot;,
+      &quot;children&quot;: []
+    },
+    {
+      &quot;name&quot;: &quot;_TagFilterRow&quot;,
+      &quot;type&quot;: &quot;class&quot;,
+      &quot;children&quot;: []
     }
-  }
+  ]
 }</pre>
+    </details>
   </main>
 </body>
 </html>

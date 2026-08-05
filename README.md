@@ -38,8 +38,8 @@ Without retrieval, the model mostly sees the patch and guesses — more noise an
 
 RAG fixes that by:
 
-1. Indexing the repo into a local SQLite vector store
-2. Retrieving the most relevant code chunks for the change
+1. Indexing the repo into a local SQLite store (vectors + FTS)
+2. Advanced retrieval (hybrid search, multi-query, architecture path expansion)
 3. Passing those chunks into the review prompt with the diff and rules
 
 So feedback can respect this project’s BLoC layering instead of generic Flutter advice.
@@ -59,7 +59,7 @@ So feedback can respect this project’s BLoC layering instead of generic Flutte
 │  2. Collect git diff (+ optional --pr)
 │  3. Run flutter analyze
 │  4. Embed query from paths/symbols/diff
-│  5. Retrieve top-k chunks (cosine similarity)
+│  5. Advanced RAG: hybrid vector+FTS, multi-query, MMR
 │  6. Ask local Ollama chat model
 │  7. Print Summary / Blockers / Should fix / Nits
 └─────────────────┘
@@ -68,7 +68,7 @@ So feedback can respect this project’s BLoC layering instead of generic Flutte
 | Piece | Role |
 |--------|------|
 | `agents/pr-reviewer/RULES.md` | Project review standards (architecture, tone, output format) |
-| `agents/pr-reviewer/rag_store.py` | Chunking, embeddings, SQLite search |
+| `agents/pr-reviewer/rag_store.py` | Advanced RAG: hybrid vector+FTS, RRF, MMR, metadata |
 | `agents/pr-reviewer/index.py` | Full + incremental SQLite index updates |
 | `agents/pr-reviewer/review.py` | Orchestrates gather → retrieve → review |
 | `agents/pr-reviewer/index/rag.sqlite` | Vector index (committed; refreshed on merge to main) |

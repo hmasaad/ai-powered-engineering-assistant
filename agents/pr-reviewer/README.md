@@ -71,13 +71,20 @@ If the index is missing, the review script builds it first.
 | `--no-open` | Don’t open HTML report |
 | `--dry-gather` | Print prompt context only |
 
-## Pipeline
+## Advanced RAG
 
-1. Read `RULES.md`  
-2. Collect git diff + `flutter analyze`  
-3. Retrieve related chunks from SQLite  
-4. Ask Ollama (JSON findings + triage)  
-5. Write HTML report under `agents/pr-reviewer/reports/`  
+Retrieval is **hybrid**, not vector-only:
+
+1. **Dense** — Ollama embeddings + cosine similarity  
+2. **Lexical** — SQLite FTS5 BM25 over path / symbols / content  
+3. **RRF fusion** — merge ranked lists from both  
+4. **Multi-query** — separate queries for diff, symbols, and BLoC layers  
+5. **Path expansion** — follow Dart imports + sibling contract/bloc/service/api/ui files  
+6. **MMR** — diversify so results aren’t all from one file  
+
+Chunk metadata stored in SQLite: `symbols`, `layer`, `imports` (schema v2).  
+Opening an older `rag.sqlite` migrates metadata + builds FTS **without** re-embedding.  
+Re-run `./scripts/pr-review-index.sh` only if you want a clean full rebuild.
 
 ## Edit behavior
 

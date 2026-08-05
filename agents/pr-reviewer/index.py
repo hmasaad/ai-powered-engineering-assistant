@@ -145,6 +145,8 @@ def write_meta(conn, *, embed_model: str, mode: str) -> None:
     set_meta(conn, "embed_model", embed_model)
     set_meta(conn, "built_at", datetime.now(timezone.utc).isoformat())
     set_meta(conn, "update_mode", mode)
+    set_meta(conn, "rag_mode", "advanced_hybrid")
+    set_meta(conn, "schema_version", "2")
     set_meta(conn, "file_count", str(indexed_file_count(conn)))
     set_meta(conn, "chunk_count", str(chunk_count(conn)))
 

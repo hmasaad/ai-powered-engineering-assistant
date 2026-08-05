@@ -19,11 +19,9 @@ sys.path.insert(0, str(AGENT_DIR))
 from rag_store import (  # noqa: E402
     DEFAULT_DB,
     DEFAULT_EMBED_MODEL,
-    build_query,
-    embed_text,
+    advanced_retrieve,
     ensure_embed_model,
     format_hits,
-    search,
 )
 
 RULES_PATH = AGENT_DIR / "RULES.md"
@@ -255,13 +253,16 @@ def retrieve_context(
         )
     try:
         ensure_embed_model(embed_model)
-        query = build_query(diff, paths)
-        embedding = embed_text(query, model=embed_model)
-        hits = search(
-            embedding,
-            top_k=top_k,
+        print(
+            "Advanced RAG: hybrid (vector+FTS) · multi-query · layer/import expand...",
+            file=sys.stderr,
+        )
+        hits = advanced_retrieve(
+            diff,
+            paths,
             db_path=db_path,
-            prefer_paths=paths,
+            embed_model=embed_model,
+            top_k=top_k,
         )
         return format_hits(hits)
     except RuntimeError as exc:

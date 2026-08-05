@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/bug-investigator/investigation_output.schema.json",
+  "title": "BugInvestigationOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "bug_statement",
+    "analyze_notes",
+    "hypotheses",
+    "likely_root_cause",
+    "reproduction_steps",
+    "recommended_fix",
+    "findings"
+  ],
+  "properties": {
+    "summary": { "type": "string", "minLength": 1 },
+    "bug_statement": { "type": "string", "minLength": 1 },
+    "analyze_notes": { "type": "string" },
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "claim",
+          "likelihood",
+          "confidence",
+          "status",
+          "evidence"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "claim": { "type": "string", "minLength": 1 },
+          "likelihood": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["likely", "possible", "ruled_out"]
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 3 }
+          }
+        }
+      }
+    },
+    "likely_root_cause": {
+      "description": "Object root cause, or null when evidence is insufficient",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line", "explanation", "confidence", "evidence"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "explanation": { "type": "string", "minLength": 1 },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidence": { "type": "string", "minLength": 3 }
+      }
+    },
+    "reproduction_steps": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "recommended_fix": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "line",
+          "severity",
+          "explanation",
+          "recommendation",
+          "confidence",
+          "evidence"
+        ],
+        "properties": {
+          "file": { "type": "string", "minLength": 1 },
+          "line": { "type": "integer", "minimum": 1 },
+          "severity": {
+            "type": "string",
+            "enum": ["blocker", "should_fix", "nit"]
+          },
+          "explanation": { "type": "string", "minLength": 1 },
+          "recommendation": { "type": "string", "minLength": 1 },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "evidence": { "type": "string", "minLength": 3 }
+        }
+      }
+    }
+  }
+}

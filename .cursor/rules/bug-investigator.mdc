@@ -1,0 +1,29 @@
+---
+description: Local Ollama Bug Investigator guidance for this Flutter project
+globs:
+alwaysApply: true
+---
+
+# Local Bug Investigator
+
+Use the local Ollama + SQLite RAG agent (not Cursor Cloud) to investigate bugs from symptoms/stacktraces:
+
+```bash
+./scripts/pr-review-index.sh   # shared RAG index (with PR reviewer)
+./scripts/bug-investigate.sh --bug "Confirm booking does nothing"
+./scripts/bug-investigate.sh --stacktrace crash.txt
+./scripts/bug-investigate.sh --bug "..." --pr 42
+```
+
+Rules: `agents/bug-investigator/RULES.md`.
+Index: `agents/pr-reviewer/index/rag.sqlite` (shared).
+
+Focus on root-cause analysis along UI → Bloc → Service → Api:
+
+- Ignored `ResponseEntity.exception`
+- Fire-and-forget async loads in blocs
+- Missing error/loading UI branches
+- Null bangs / setState after dispose
+- Stacktrace frames as primary leads
+
+Prefer evidence-bound hypotheses and a concrete recommended fix — never auto-patch or merge.

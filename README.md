@@ -160,3 +160,24 @@ Sibling agent to the PR reviewer. Same Ollama + shared SQLite RAG pipeline, but 
 | `agents/performance-reviewer/reports/` | HTML/JSON report pack |
 
 More detail: `agents/performance-reviewer/README.md`
+
+## Local Bug Investigator (root-cause analysis)
+
+Sibling agent focused on **investigating bugs from symptoms/stacktraces** (optional PR scope). Same Ollama + shared SQLite RAG pipeline, with bug-pattern prechecks and an investigation report (hypotheses → root cause → repro → fix).
+
+```bash
+./scripts/bug-investigate.sh --bug "Confirm booking does nothing after selecting a slot"
+./scripts/bug-investigate.sh --stacktrace crash.txt
+./scripts/bug-investigate.sh --bug "List does not refresh" --pr 42
+./scripts/bug-investigate.sh --dry-gather --bug "..."
+```
+
+| Piece | Role |
+|--------|------|
+| `agents/bug-investigator/RULES.md` | Investigation standards + JSON schema |
+| `agents/bug-investigator/prechecks.py` | Deterministic bug-pattern heuristics |
+| `agents/bug-investigator/investigate.py` | Orchestrates gather → retrieve → investigate |
+| `agents/pr-reviewer/index/rag.sqlite` | Shared vector/FTS index |
+| `agents/bug-investigator/reports/` | HTML/JSON report pack |
+
+More detail: `agents/bug-investigator/README.md`

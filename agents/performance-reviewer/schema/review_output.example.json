@@ -1,0 +1,15 @@
+{
+  "summary": "List and image paths introduce avoidable UI-isolate work on salon browse.",
+  "analyze_notes": "none",
+  "findings": [
+    {
+      "file": "lib/ui/home/salon_list_screen.dart",
+      "line": 167,
+      "severity": "should_fix",
+      "explanation": "Image.network decodes without cacheWidth/cacheHeight; list scroll may jank.",
+      "recommendation": "Pass cacheWidth/cacheHeight matching display size, or use a cached image provider.",
+      "confidence": 0.84,
+      "evidence": "diff_hunk:lib/ui/home/salon_list_screen.dart:167"
+    }
+  ]
+}

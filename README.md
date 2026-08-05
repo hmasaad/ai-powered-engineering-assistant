@@ -139,3 +139,24 @@ Manual full rebuild anytime: `./scripts/pr-review-index.sh`
 Useful flags: `--base`, `--model`, `--embed-model`, `--top-k`, `--no-rag`.
 
 More detail: `agents/pr-reviewer/README.md`
+
+## Local Performance Reviewer (detect performance concerns)
+
+Sibling agent to the PR reviewer. Same Ollama + shared SQLite RAG pipeline, but focused on Flutter performance: rebuild waste, list/scroll cost, images, main-isolate stalls, and related jank risks.
+
+```bash
+# uses the same RAG index as the PR reviewer
+./scripts/perf-review.sh
+./scripts/perf-review.sh --pr 42
+./scripts/perf-review.sh --dry-gather
+```
+
+| Piece | Role |
+|--------|------|
+| `agents/performance-reviewer/RULES.md` | Performance review standards |
+| `agents/performance-reviewer/prechecks.py` | Deterministic Flutter perf heuristics |
+| `agents/performance-reviewer/review.py` | Orchestrates gather → retrieve → review |
+| `agents/pr-reviewer/index/rag.sqlite` | Shared vector/FTS index |
+| `agents/performance-reviewer/reports/` | HTML/JSON report pack |
+
+More detail: `agents/performance-reviewer/README.md`

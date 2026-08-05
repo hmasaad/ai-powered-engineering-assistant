@@ -44,7 +44,9 @@ RAG fixes that by:
 
 So feedback can respect this project’s BLoC layering instead of generic Flutter advice.
 
-Guardrails (v1) keep reviews scoped to changed reviewable files, redact secrets, require schema-valid findings with confidence, and keep the agent read-only (never approve/merge).
+Guardrails (v1) keep reviews scoped to changed reviewable files, redact secrets, require schema-valid evidence-bound findings with confidence, support mutes, and keep the agent read-only (never approve/merge).
+
+High-impact upgrades: deterministic prechecks → triage model → optional strong-model routing → HTML/JSON report pack.
 
 ### How it works
 

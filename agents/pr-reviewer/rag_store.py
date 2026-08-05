@@ -992,8 +992,10 @@ def format_hits(hits: list[ChunkHit]) -> str:
         if hit.source:
             meta.append(f"via={hit.source}")
         meta_s = (" " + " ".join(meta)) if meta else ""
+        cite = f"rag:{hit.path}:{hit.start_line}-{hit.end_line}"
         parts.append(
             f"### {hit.path}:{hit.start_line}-{hit.end_line} "
-            f"(score={hit.score:.3f}{meta_s})\n```\n{hit.content}\n```"
+            f"(score={hit.score:.3f} evidence={cite}{meta_s})\n"
+            f"```\n{hit.content}\n```"
         )
     return "\n\n".join(parts)

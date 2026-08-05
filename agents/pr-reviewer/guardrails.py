@@ -199,6 +199,8 @@ class GuardrailReport:
     secrets_redacted: int = 0
     findings_dropped_low_confidence: int = 0
     findings_dropped_invalid: int = 0
+    findings_dropped_no_evidence: int = 0
+    findings_muted: int = 0
     schema_ok: bool = False
     blocked_send: bool = False
     notes: list[str] = field(default_factory=list)
@@ -477,6 +479,7 @@ REVIEW_SCHEMA: dict[str, Any] = {
                     "explanation",
                     "recommendation",
                     "confidence",
+                    "evidence",
                 ],
                 "additionalProperties": False,
                 "properties": {
@@ -486,6 +489,14 @@ REVIEW_SCHEMA: dict[str, Any] = {
                     "explanation": {"type": "string", "minLength": 1},
                     "recommendation": {"type": "string", "minLength": 1},
                     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "evidence": {
+                        "type": "string",
+                        "minLength": 3,
+                        "description": (
+                            "Must cite diff_hunk:path:line, rag chunk header, "
+                            "analyze:path:line, or precheck:id"
+                        ),
+                    },
                 },
             },
         },
@@ -596,20 +607,67 @@ def validate_review_payload(data: dict[str, Any]) -> list[str]:
     return _validate(data, REVIEW_SCHEMA)
 
 
+def evidence_is_grounded(
+    evidence: str,
+    *,
+    file_path: str,
+    line: int,
+    diff_text: str,
+    retrieved_text: str,
+    analyze_text: str,
+    allowed_evidence: set[str] | None = None,
+) -> bool:
+    """True if evidence cites diff/RAG/analyze/precheck material."""
+    e = (evidence or "").strip()
+    if len(e) < 3:
+        return False
+    if allowed_evidence and e in allowed_evidence:
+        return True
+    if e.startswith("precheck:"):
+        return True
+    if e.startswith("analyze:"):
+        # analyze:path:line or raw analyzer snippet
+        return file_path in e or file_path in (analyze_text or "")
+    if e.startswith("diff_hunk:"):
+        # diff_hunk:path:line
+        return file_path in e or f"{file_path}:{line}" in e
+    if e.startswith("rag:") or e.startswith("chunk:"):
+        return e in (retrieved_text or "") or file_path in (retrieved_text or "")
+    # Accept path:line citations and literal snippets present in context
+    if f"{file_path}:{line}" in e:
+        return True
+    if file_path in e and str(line) in e:
+        return True
+    haystacks = (diff_text or "", retrieved_text or "", analyze_text or "")
+    if any(e in hay for hay in haystacks if hay):
+        return True
+    # short unique token from evidence present in diff near the file
+    token = e[:80]
+    return any(token in hay for hay in haystacks if hay and len(token) >= 8)
+
+
 def filter_findings(
     data: dict[str, Any],
     *,
     allowed_files: set[str],
     min_confidence: float = DEFAULT_MIN_CONFIDENCE,
-) -> tuple[dict[str, Any], int, int]:
-    """Drop invalid/low-confidence/out-of-scope findings. Returns (data, low_conf, invalid)."""
+    diff_text: str = "",
+    retrieved_text: str = "",
+    analyze_text: str = "",
+    allowed_evidence: set[str] | None = None,
+) -> tuple[dict[str, Any], int, int, int]:
+    """Drop invalid/low-confidence/ungrounded findings.
+
+    Returns (data, low_conf, invalid, no_evidence).
+    """
     findings = data.get("findings")
     if not isinstance(findings, list):
-        return data, 0, 0
+        return data, 0, 0, 0
 
     kept: list[dict[str, Any]] = []
     low = 0
     invalid = 0
+    no_evidence = 0
     for item in findings:
         if not isinstance(item, dict):
             invalid += 1
@@ -624,6 +682,7 @@ def filter_findings(
         severity = item.get("severity")
         explanation = item.get("explanation")
         recommendation = item.get("recommendation")
+        evidence = item.get("evidence")
         if (
             not file_path
             or line < 1
@@ -632,15 +691,27 @@ def filter_findings(
             or not explanation.strip()
             or not isinstance(recommendation, str)
             or not recommendation.strip()
+            or not isinstance(evidence, str)
+            or not evidence.strip()
         ):
             invalid += 1
             continue
         if allowed_files and file_path not in allowed_files:
-            # Finding outside reviewed changed files — drop
             invalid += 1
             continue
         if confidence < min_confidence:
             low += 1
+            continue
+        if not evidence_is_grounded(
+            evidence,
+            file_path=file_path,
+            line=line,
+            diff_text=diff_text,
+            retrieved_text=retrieved_text,
+            analyze_text=analyze_text,
+            allowed_evidence=allowed_evidence,
+        ):
+            no_evidence += 1
             continue
         kept.append(
             {
@@ -650,12 +721,15 @@ def filter_findings(
                 "explanation": explanation.strip(),
                 "recommendation": recommendation.strip(),
                 "confidence": round(confidence, 3),
+                "evidence": evidence.strip(),
+                "source": str(item.get("source") or "model"),
+                "check_id": str(item.get("check_id") or ""),
             }
         )
 
     out = dict(data)
     out["findings"] = kept
-    return out, low, invalid
+    return out, low, invalid, no_evidence
 
 
 def format_review_markdown(data: dict[str, Any]) -> str:
@@ -675,9 +749,11 @@ def format_review_markdown(data: dict[str, Any]) -> str:
         for item in items:
             lines.append(
                 f"- `{item['file']}:{item['line']}` "
-                f"(confidence={item['confidence']:.2f})\n"
+                f"(confidence={item['confidence']:.2f}, "
+                f"source={item.get('source', 'model')})\n"
                 f"  - {item['explanation']}\n"
-                f"  - Recommendation: {item['recommendation']}"
+                f"  - Recommendation: {item['recommendation']}\n"
+                f"  - Evidence: `{item.get('evidence', '')}`"
             )
         return "\n".join(lines)
 

@@ -59,10 +59,20 @@ Enforced in code (`guardrails.py`) before/after the model:
 | Ignore junk | Skips generated, binary, lockfiles, deps, RAG artifacts |
 | Secret scan | Detects & redacts keys/tokens before prompting |
 | Nearby context | Hunk ± ~25 lines — not whole-file dumps |
-| Structured findings | Requires file, line, severity, explanation, recommendation, confidence |
+| Structured findings | Requires file, line, severity, explanation, recommendation, confidence, evidence |
+| Evidence-bound | Drops findings without grounded evidence |
 | Confidence filter | Drops findings below `--min-confidence` (default 0.55) |
 | JSON schema | Validates model output; rejects invalid payloads |
+| Mutes | `mutes.yaml` suppresses recurring noise |
 | Read-only | Never approves, merges, or modifies PRs |
+
+## High-impact pipeline
+
+1. **Deterministic prechecks** — flutter analyze + layer/DI/debug heuristics (before LLM)  
+2. **Triage model** — fast pass for residual risks  
+3. **Strong model routing** — re-checks `blocker`/`should_fix` when `--strong-model` differs  
+4. **Evidence + confidence + mutes** — post-filters  
+5. **Report pack** — `reports/pr-N/report.json` + `index.html` + dashboard  
 
 ## Run a review
 
@@ -79,12 +89,16 @@ If the index is missing, the review script builds it first.
 |---|---|
 | `--pr 42` | Review GitHub PR #42 |
 | `--base origin/main` | Diff base (`PR_REVIEW_BASE`) |
-| `--model llama3.2` | Chat model (`OLLAMA_MODEL`) |
+| `--model llama3.2` | Triage model (`OLLAMA_TRIAGE_MODEL` / `OLLAMA_MODEL`) |
+| `--strong-model llama3.2` | Strong pass model (`OLLAMA_STRONG_MODEL`) |
+| `--no-routing` | Skip triage→strong routing |
 | `--embed-model nomic-embed-text` | Embed model (`OLLAMA_EMBED_MODEL`) |
 | `--top-k 8` | Retrieved chunks (`PR_REVIEW_TOP_K`) |
 | `--min-confidence 0.55` | Drop low-confidence findings |
-| `--json-out path.json` | Write validated JSON review payload |
+| `--json-out path.json` | Write merged JSON review payload |
 | `--no-rag` | Skip retrieval |
+| `--no-report` | Skip HTML/JSON report pack |
+| `--no-open` | Don’t open HTML report |
 | `--dry-gather` | Print redacted prompt context only |
 
 ## Advanced RAG

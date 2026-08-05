@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-08-05T10:57:58.812560+00:00",
+  "label": "local test",
+  "pr": null,
+  "base": "origin/main",
+  "head": "HEAD",
+  "triage_model": "llama3.2",
+  "strong_model": "llama3.2",
+  "routing_used": false,
+  "reviewed_paths": [
+    "lib/a.dart"
+  ],
+  "skipped_paths": [],
+  "summary": "hi",
+  "analyze_notes": "none",
+  "findings": [
+    {
+      "file": "lib/a.dart",
+      "line": 2,
+      "severity": "should_fix",
+      "explanation": "bug",
+      "recommendation": "fix",
+      "confidence": 0.9,
+      "evidence": "diff_hunk:lib/a.dart:2",
+      "source": "model",
+      "check_id": ""
+    }
+  ],
+  "counts": {
+    "blocker": 0,
+    "should_fix": 1,
+    "nit": 0,
+    "precheck": 1,
+    "muted": 0,
+    "total": 1
+  },
+  "guardrail_notes": [
+    "ok"
+  ],
+  "read_only": true
+}

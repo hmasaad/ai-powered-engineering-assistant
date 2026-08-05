@@ -8,12 +8,10 @@
   "properties": {
     "summary": {
       "type": "string",
-      "minLength": 1,
-      "description": "1-3 sentence review summary"
+      "minLength": 1
     },
     "analyze_notes": {
-      "type": "string",
-      "description": "Relevant flutter analyze notes, or 'none'"
+      "type": "string"
     },
     "findings": {
       "type": "array",
@@ -26,35 +24,27 @@
           "severity",
           "explanation",
           "recommendation",
-          "confidence"
+          "confidence",
+          "evidence"
         ],
         "properties": {
-          "file": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Repo-relative path of a changed reviewable file"
-          },
-          "line": {
-            "type": "integer",
-            "minimum": 1
-          },
+          "file": { "type": "string", "minLength": 1 },
+          "line": { "type": "integer", "minimum": 1 },
           "severity": {
             "type": "string",
             "enum": ["blocker", "should_fix", "nit"]
           },
-          "explanation": {
-            "type": "string",
-            "minLength": 1
-          },
-          "recommendation": {
-            "type": "string",
-            "minLength": 1
-          },
+          "explanation": { "type": "string", "minLength": 1 },
+          "recommendation": { "type": "string", "minLength": 1 },
           "confidence": {
             "type": "number",
             "minimum": 0,
-            "maximum": 1,
-            "description": "Model self-reported confidence; findings below threshold are dropped"
+            "maximum": 1
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 3,
+            "description": "diff_hunk:path:line | analyze:path:line | rag:path:start-end | precheck:id"
           }
         }
       }

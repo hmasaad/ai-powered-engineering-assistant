@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local PR reviewer powered by Ollama + SQLite RAG + guardrails."""
+"""Local PR reviewer: Ollama + advanced RAG + guardrails + high-impact upgrades."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 AGENT_DIR = Path(__file__).resolve().parent
 ROOT = AGENT_DIR.parents[1]
@@ -30,6 +31,12 @@ from guardrails import (  # noqa: E402
     scan_secrets,
     validate_review_payload,
 )
+from mutes import apply_mutes, load_mute_rules  # noqa: E402
+from prechecks import (  # noqa: E402
+    format_prechecks_for_prompt,
+    precheck_evidence_ids,
+    run_prechecks,
+)
 from rag_store import (  # noqa: E402
     DEFAULT_DB,
     DEFAULT_EMBED_MODEL,
@@ -37,13 +44,18 @@ from rag_store import (  # noqa: E402
     ensure_embed_model,
     format_hits,
 )
+from report import build_report_payload, write_report  # noqa: E402
 
 RULES_PATH = AGENT_DIR / "RULES.md"
-DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
+DEFAULT_TRIAGE_MODEL = os.environ.get("OLLAMA_TRIAGE_MODEL") or os.environ.get(
+    "OLLAMA_MODEL", "llama3.2"
+)
+DEFAULT_STRONG_MODEL = os.environ.get("OLLAMA_STRONG_MODEL", DEFAULT_TRIAGE_MODEL)
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 MAX_DIFF_CHARS = 80_000
 MAX_FILES = 40
 DEFAULT_TOP_K = int(os.environ.get("PR_REVIEW_TOP_K", "8"))
+SERIOUS = {"blocker", "should_fix"}
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -56,10 +68,15 @@ def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[
     )
 
 
+def list_ollama_models() -> set[str]:
+    with urllib.request.urlopen(f"{OLLAMA_HOST}/api/tags", timeout=3) as resp:
+        payload = json.loads(resp.read().decode())
+    return {m.get("name", "") for m in payload.get("models", [])}
+
+
 def ensure_ollama(model: str) -> None:
     try:
-        with urllib.request.urlopen(f"{OLLAMA_HOST}/api/tags", timeout=3) as resp:
-            payload = json.loads(resp.read().decode())
+        models = list_ollama_models()
     except Exception as exc:  # noqa: BLE001
         sys.stderr.write(
             f"Ollama is not reachable at {OLLAMA_HOST}.\n"
@@ -69,7 +86,6 @@ def ensure_ollama(model: str) -> None:
         )
         sys.exit(1)
 
-    models = {m.get("name", "") for m in payload.get("models", [])}
     short = model.split(":")[0]
     if model not in models and not any(m.startswith(short) for m in models):
         sys.stderr.write(
@@ -80,6 +96,17 @@ def ensure_ollama(model: str) -> None:
         sys.exit(1)
 
 
+def resolve_model(preferred: str, fallback: str) -> str:
+    try:
+        models = list_ollama_models()
+    except Exception:  # noqa: BLE001
+        return preferred
+    short = preferred.split(":")[0]
+    if preferred in models or any(m.startswith(short) for m in models):
+        return preferred
+    return fallback
+
+
 def diff_spec(base: str, head: str) -> str:
     merge_base = run(["git", "merge-base", base, head])
     if merge_base.returncode == 0 and merge_base.stdout.strip():
@@ -88,7 +115,6 @@ def diff_spec(base: str, head: str) -> str:
 
 
 def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
-    """Fetch PR head and return (base_ref, head_ref, label). Read-only — never approve/merge."""
     head_ref = f"refs/pr-review/{pr_number}"
     label = f"PR #{pr_number}"
 
@@ -102,14 +128,7 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
 
     base_ref = fallback_base
     gh = run(
-        [
-            "gh",
-            "pr",
-            "view",
-            str(pr_number),
-            "--json",
-            "baseRefName,title,url",
-        ]
+        ["gh", "pr", "view", str(pr_number), "--json", "baseRefName,title,url"]
     )
     if gh.returncode == 0 and gh.stdout.strip():
         try:
@@ -143,7 +162,6 @@ def raw_unified_diff(
     *,
     include_dirty: bool = True,
 ) -> str:
-    """Unified diff body used for hunk/nearby parsing (no stat wrappers)."""
     spec = diff_spec(base, head)
     parts = [run(["git", "diff", spec]).stdout or ""]
     if include_dirty and head == "HEAD":
@@ -258,22 +276,63 @@ def build_prompt(
     analyze: str,
     retrieved: str,
     reviewed_paths: list[str],
+    prechecks_text: str,
+    *,
+    mode: str = "full",
+    candidate_findings: list[dict[str, Any]] | None = None,
 ) -> str:
     path_list = "\n".join(f"- {p}" for p in reviewed_paths) or "- (none)"
+    if mode == "strong":
+        candidates = json.dumps(candidate_findings or [], indent=2)
+        return f"""You are the strong second-pass reviewer for salon_booking.
+
+{assert_read_only_policy()}
+
+Re-evaluate ONLY these serious candidate findings from triage.
+Keep a finding only if evidence is solid; drop or downgrade weak ones.
+Return full JSON schema (summary, analyze_notes, findings) with residual + confirmed serious issues.
+Do not invent new nits unless clearly blocker-level.
+
+# CANDIDATE FINDINGS
+{candidates}
+
+# RULES
+{rules}
+
+# DETERMINISTIC PRECHECKS (already filed — do not duplicate)
+{prechecks_text}
+
+# RETRIEVED CONTEXT
+{retrieved}
+
+# FLUTTER ANALYZE
+{analyze}
+
+# DIFF
+{diff}
+
+# NEARBY CODE
+{files}
+"""
+
     return f"""Review this local git change set for the salon_booking Flutter project.
 
 {assert_read_only_policy()}
 
 Follow RULES exactly. Use RETRIEVED CONTEXT for architecture and neighboring code.
-Do not invent issues that are not supported by the diff, retrieved context, nearby file context, or analyze output.
+Do not invent issues that are not supported by the diff, retrieved context, nearby file context, prechecks, or analyze output.
 Review ONLY these changed reviewable files:
 {path_list}
 
 Output MUST be a single JSON object matching the schema in RULES.
+Every finding needs grounded evidence.
 Do not approve, merge, or modify the PR.
 
 # RULES
 {rules}
+
+# DETERMINISTIC PRECHECKS (already filed — do not duplicate)
+{prechecks_text}
 
 # RETRIEVED CONTEXT (RAG — nearby architecture only)
 {retrieved}
@@ -289,7 +348,7 @@ Do not approve, merge, or modify the PR.
 """
 
 
-def ollama_chat(model: str, prompt: str) -> str:
+def ollama_chat(model: str, prompt: str, *, system: str | None = None) -> str:
     body = {
         "model": model,
         "stream": False,
@@ -297,11 +356,12 @@ def ollama_chat(model: str, prompt: str) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": (
+                "content": system
+                or (
                     "You are a strict but fair local PR reviewer. "
                     "Follow the provided RULES and emit ONLY valid JSON "
                     "matching the review schema. "
-                    "Ground findings in DIFF, RETRIEVED CONTEXT, and ANALYZE. "
+                    "Ground every finding with evidence. "
                     "Never approve, merge, or modify PRs."
                 ),
             },
@@ -340,8 +400,11 @@ def apply_output_guardrails(
     reviewed_paths: list[str],
     min_confidence: float,
     report: GuardrailReport,
+    diff_text: str,
+    retrieved_text: str,
+    analyze_text: str,
+    allowed_evidence: set[str],
 ) -> tuple[dict | None, str]:
-    """Validate JSON, filter findings, return (payload|None, markdown_or_error)."""
     data = extract_json_object(raw)
     if data is None:
         report.schema_ok = False
@@ -366,18 +429,44 @@ def apply_output_guardrails(
         )
 
     report.schema_ok = True
-    filtered, low, invalid = filter_findings(
+    filtered, low, invalid, no_evidence = filter_findings(
         data,
         allowed_files=set(reviewed_paths),
         min_confidence=min_confidence,
+        diff_text=diff_text,
+        retrieved_text=retrieved_text,
+        analyze_text=analyze_text,
+        allowed_evidence=allowed_evidence,
     )
     report.findings_dropped_low_confidence = low
     report.findings_dropped_invalid = invalid
-    if low or invalid:
+    report.findings_dropped_no_evidence = no_evidence
+    if low or invalid or no_evidence:
         report.notes.append(
-            f"Dropped findings: low_confidence={low}, invalid_or_out_of_scope={invalid}"
+            f"Dropped findings: low_confidence={low}, "
+            f"invalid_or_out_of_scope={invalid}, no_evidence={no_evidence}"
         )
     return filtered, format_review_markdown(filtered)
+
+
+def merge_findings(
+    model_payload: dict[str, Any] | None,
+    precheck_findings: list[dict[str, Any]],
+) -> dict[str, Any]:
+    base = {
+        "summary": (model_payload or {}).get("summary")
+        or "Deterministic prechecks only (model produced no valid summary).",
+        "analyze_notes": (model_payload or {}).get("analyze_notes") or "none",
+        "findings": [],
+    }
+    seen: set[str] = set()
+    for item in list(precheck_findings) + list((model_payload or {}).get("findings") or []):
+        key = f"{item.get('file')}:{item.get('line')}:{item.get('severity')}:{item.get('check_id') or item.get('explanation', '')[:40]}"
+        if key in seen:
+            continue
+        seen.add(key)
+        base["findings"].append(item)
+    return base
 
 
 def print_guardrail_summary(report: GuardrailReport) -> None:
@@ -402,13 +491,20 @@ def print_guardrail_summary(report: GuardrailReport) -> None:
             file=sys.stderr,
         )
     print(f"Schema valid: {report.schema_ok}", file=sys.stderr)
-    if report.findings_dropped_low_confidence or report.findings_dropped_invalid:
+    if (
+        report.findings_dropped_low_confidence
+        or report.findings_dropped_invalid
+        or report.findings_dropped_no_evidence
+    ):
         print(
             "Filtered findings: "
             f"low_confidence={report.findings_dropped_low_confidence}, "
-            f"invalid={report.findings_dropped_invalid}",
+            f"invalid={report.findings_dropped_invalid}, "
+            f"no_evidence={report.findings_dropped_no_evidence}",
             file=sys.stderr,
         )
+    if report.findings_muted:
+        print(f"Muted findings: {report.findings_muted}", file=sys.stderr)
     print(assert_read_only_policy(), file=sys.stderr)
     for note in report.notes:
         print(f"Note: {note}", file=sys.stderr)
@@ -416,64 +512,43 @@ def print_guardrail_summary(report: GuardrailReport) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Local Ollama PR reviewer with SQLite RAG + guardrails",
+        description="Local Ollama PR reviewer with RAG, guardrails, routing, reports",
     )
-    parser.add_argument(
-        "--pr",
-        type=int,
-        default=None,
-        help="GitHub PR number to review (fetches pull/<n>/head from origin)",
-    )
+    parser.add_argument("--pr", type=int, default=None)
     parser.add_argument(
         "--base",
         default=os.environ.get("PR_REVIEW_BASE", "origin/main"),
-        help="Git base ref to diff against (default: origin/main; "
-        "overridden by PR base when --pr and gh are available)",
     )
     parser.add_argument(
         "--model",
-        default=DEFAULT_MODEL,
-        help=f"Ollama chat model (default: {DEFAULT_MODEL})",
+        default=DEFAULT_TRIAGE_MODEL,
+        help=f"Triage/chat model (default: {DEFAULT_TRIAGE_MODEL})",
     )
     parser.add_argument(
-        "--embed-model",
-        default=DEFAULT_EMBED_MODEL,
-        help=f"Ollama embed model (default: {DEFAULT_EMBED_MODEL})",
+        "--strong-model",
+        default=DEFAULT_STRONG_MODEL,
+        help=f"Strong model for serious findings (default: {DEFAULT_STRONG_MODEL})",
     )
     parser.add_argument(
-        "--db",
-        default=str(DEFAULT_DB),
-        help="SQLite RAG index path",
+        "--no-routing",
+        action="store_true",
+        help="Disable triage→strong model routing (single model only)",
     )
-    parser.add_argument(
-        "--top-k",
-        type=int,
-        default=DEFAULT_TOP_K,
-        help="Number of RAG chunks to retrieve",
-    )
+    parser.add_argument("--embed-model", default=DEFAULT_EMBED_MODEL)
+    parser.add_argument("--db", default=str(DEFAULT_DB))
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument(
         "--min-confidence",
         type=float,
         default=float(
             os.environ.get("PR_REVIEW_MIN_CONFIDENCE", str(DEFAULT_MIN_CONFIDENCE))
         ),
-        help=f"Drop findings below this confidence (default: {DEFAULT_MIN_CONFIDENCE})",
     )
-    parser.add_argument(
-        "--json-out",
-        default="",
-        help="Optional path to write the validated JSON review payload",
-    )
-    parser.add_argument(
-        "--no-rag",
-        action="store_true",
-        help="Skip RAG retrieval",
-    )
-    parser.add_argument(
-        "--dry-gather",
-        action="store_true",
-        help="Print gathered (redacted) context only; do not call chat model",
-    )
+    parser.add_argument("--json-out", default="")
+    parser.add_argument("--no-rag", action="store_true")
+    parser.add_argument("--no-report", action="store_true")
+    parser.add_argument("--no-open", action="store_true")
+    parser.add_argument("--dry-gather", action="store_true")
     args = parser.parse_args()
 
     if not RULES_PATH.is_file():
@@ -487,6 +562,7 @@ def main() -> int:
     include_dirty = True
     file_ref: str | None = None
     target_label = "current branch / working tree"
+    pr_number = args.pr
 
     if args.pr is not None:
         print(f"Fetching PR #{args.pr} from origin (read-only)...", file=sys.stderr)
@@ -507,30 +583,63 @@ def main() -> int:
     report.reviewed_paths = reviewed
     report.skipped_paths = skipped
 
+    empty_payload = {
+        "summary": "No reviewable changed files "
+        "(only generated/binary/dependency paths, or empty diff).",
+        "analyze_notes": "none",
+        "findings": [],
+    }
+
     if not reviewed:
         print_guardrail_summary(report)
-        print(
-            "## Summary\nNo reviewable changed files "
-            "(only generated/binary/dependency paths, or empty diff).\n\n"
-            "## Blockers\nNone\n\n## Should fix\nNone\n\n## Nits\nNone\n\n"
-            "## Analyze notes\nnone"
-        )
+        print(format_review_markdown(empty_payload))
+        if not args.no_report:
+            write_report(
+                build_report_payload(
+                    label=target_label,
+                    pr=pr_number,
+                    base=base,
+                    head=head,
+                    triage_model=args.model,
+                    strong_model=args.strong_model,
+                    routing_used=False,
+                    reviewed_paths=reviewed,
+                    skipped_paths=skipped,
+                    payload=empty_payload,
+                    precheck_count=0,
+                    muted_count=0,
+                    guardrail_notes=report.notes,
+                ),
+                open_browser=not args.no_open,
+            )
         return 0
 
     raw_diff = raw_unified_diff(base, head, include_dirty=include_dirty)
     allowed = set(reviewed)
     guarded_diff = filter_diff_to_paths(raw_diff, allowed)
-    # Keep a short stat for humans in dry-gather
     display_diff = guarded_diff
     if len(display_diff) > MAX_DIFF_CHARS:
         display_diff = display_diff[:MAX_DIFF_CHARS] + "\n\n[diff truncated]"
 
+    loader = lambda p: load_file(p, file_ref)  # noqa: E731
     files = build_guarded_file_context(
         reviewed,
         diff_text=raw_diff,
-        file_loader=lambda p: load_file(p, file_ref),
+        file_loader=loader,
     )
+    print("Running flutter analyze + deterministic prechecks...", file=sys.stderr)
     analyze = flutter_analyze()
+    precheck_objs = run_prechecks(
+        reviewed_paths=reviewed,
+        diff_text=raw_diff,
+        analyze_text=analyze,
+        loader=loader,
+        root=ROOT,
+    )
+    precheck_findings = [p.as_finding() for p in precheck_objs]
+    prechecks_text = format_prechecks_for_prompt(precheck_objs)
+    allowed_evidence = precheck_evidence_ids(precheck_objs)
+    print(f"Prechecks: {len(precheck_findings)} finding(s)", file=sys.stderr)
 
     if args.no_rag:
         retrieved = "(RAG disabled)"
@@ -551,9 +660,9 @@ def main() -> int:
         analyze,
         retrieved,
         reviewed,
+        prechecks_text,
     )
 
-    # Secret scan + redact before any model call
     secret_hits = scan_secrets(prompt, path="(assembled prompt)")
     report.secrets = secret_hits
     prompt, n_redacted = redact_secrets(prompt)
@@ -569,33 +678,137 @@ def main() -> int:
         print(prompt)
         return 0
 
-    ensure_ollama(args.model)
-    print(f"Reviewing with Ollama model '{args.model}'...", file=sys.stderr)
-    raw_review = ollama_chat(args.model, prompt)
+    triage_model = args.model
+    strong_model = resolve_model(args.strong_model, triage_model)
+    ensure_ollama(triage_model)
+    if strong_model != triage_model:
+        ensure_ollama(strong_model)
 
-    payload, markdown = apply_output_guardrails(
+    print(f"Triage pass with '{triage_model}'...", file=sys.stderr)
+    raw_review = ollama_chat(triage_model, prompt)
+    payload, _markdown = apply_output_guardrails(
         raw_review,
         reviewed_paths=reviewed,
         min_confidence=args.min_confidence,
         report=report,
+        diff_text=display_diff,
+        retrieved_text=retrieved,
+        analyze_text=analyze,
+        allowed_evidence=allowed_evidence,
     )
-    # Re-print filter notes after validation
-    if report.findings_dropped_low_confidence or report.findings_dropped_invalid:
-        print(
-            "Post-filter: "
-            f"low_confidence={report.findings_dropped_low_confidence}, "
-            f"invalid={report.findings_dropped_invalid}",
-            file=sys.stderr,
-        )
 
-    if args.json_out and payload is not None:
+    routing_used = False
+    if (
+        payload is not None
+        and not args.no_routing
+        and strong_model
+    ):
+        serious = [
+            f
+            for f in payload.get("findings") or []
+            if f.get("severity") in SERIOUS
+        ]
+        if serious and strong_model != triage_model:
+            routing_used = True
+            print(
+                f"Strong pass with '{strong_model}' on {len(serious)} serious finding(s)...",
+                file=sys.stderr,
+            )
+            strong_prompt = build_prompt(
+                rules,
+                display_diff,
+                files,
+                analyze,
+                retrieved,
+                reviewed,
+                prechecks_text,
+                mode="strong",
+                candidate_findings=serious,
+            )
+            strong_prompt, _ = redact_secrets(strong_prompt)
+            raw_strong = ollama_chat(
+                strong_model,
+                strong_prompt,
+                system=(
+                    "You are the strong second-pass PR reviewer. "
+                    "Emit ONLY valid JSON. Drop weak serious findings. "
+                    "Never approve or merge PRs."
+                ),
+            )
+            strong_payload, _ = apply_output_guardrails(
+                raw_strong,
+                reviewed_paths=reviewed,
+                min_confidence=args.min_confidence,
+                report=report,
+                diff_text=display_diff,
+                retrieved_text=retrieved,
+                analyze_text=analyze,
+                allowed_evidence=allowed_evidence,
+            )
+            if strong_payload is not None:
+                # Keep triage nits; replace serious with strong-pass results
+                nits = [
+                    f
+                    for f in (payload.get("findings") or [])
+                    if f.get("severity") == "nit"
+                ]
+                payload = {
+                    "summary": strong_payload.get("summary") or payload.get("summary"),
+                    "analyze_notes": strong_payload.get("analyze_notes")
+                    or payload.get("analyze_notes"),
+                    "findings": list(strong_payload.get("findings") or []) + nits,
+                }
+        elif serious and strong_model == triage_model:
+            report.notes.append(
+                "Strong model unavailable/same as triage — skipped routing"
+            )
+
+    merged = merge_findings(payload, precheck_findings)
+
+    mute_rules = load_mute_rules()
+    kept, muted = apply_mutes(merged.get("findings") or [], mute_rules)
+    report.findings_muted = len(muted)
+    if muted:
+        report.notes.append(
+            "Muted: " + ", ".join(sorted({m.get('muted_by', '?') for m in muted}))
+        )
+    merged["findings"] = kept
+
+    markdown = format_review_markdown(merged)
+    print(markdown)
+
+    if args.json_out:
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        out_path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
         print(f"Wrote validated JSON → {out_path}", file=sys.stderr)
 
-    print(markdown)
-    if payload is None:
+    if not args.no_report:
+        html_path = write_report(
+            build_report_payload(
+                label=target_label,
+                pr=pr_number,
+                base=base,
+                head=head,
+                triage_model=triage_model,
+                strong_model=strong_model,
+                routing_used=routing_used,
+                reviewed_paths=reviewed,
+                skipped_paths=skipped,
+                payload=merged,
+                precheck_count=len(precheck_findings),
+                muted_count=len(muted),
+                guardrail_notes=report.notes
+                + [
+                    f"routing_used={routing_used}",
+                    f"prechecks={len(precheck_findings)}",
+                ],
+            ),
+            open_browser=not args.no_open,
+        )
+        print(f"Report → {html_path}", file=sys.stderr)
+
+    if payload is None and not precheck_findings:
         return 2
     return 0
 

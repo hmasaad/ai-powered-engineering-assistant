@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>PR Review — local test</title>
+  <style>
+    :root {
+      --bg: #f6f4ef;
+      --ink: #1c1917;
+      --muted: #78716c;
+      --line: #e7e5e4;
+      --blocker: #b91c1c;
+      --should: #c2410c;
+      --nit: #1d4ed8;
+      --card: #fffdf8;
+    }
+    body {
+      margin: 0; font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 10% 0%, #fde68a55, transparent 40%),
+        linear-gradient(180deg, #faf7f2, var(--bg));
+      color: var(--ink);
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    h1 { font-family: "Iowan Old Style", "Palatino Linotype", serif;
+         font-size: 2rem; margin: 0 0 .35rem; }
+    h2 { margin-top: 2rem; font-size: 1.15rem; }
+    .muted { color: var(--muted); }
+    .strip { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0 1.5rem; }
+    .stat { background: var(--card); border: 1px solid var(--line);
+            border-radius: 12px; padding: .75rem 1rem; min-width: 7rem; }
+    .stat b { display: block; font-size: 1.4rem; }
+    .pill { display: inline-block; border-radius: 999px; padding: .15rem .55rem;
+            font-size: .75rem; color: #fff; text-transform: uppercase; }
+    .pill.blocker { background: var(--blocker); }
+    .pill.should_fix { background: var(--should); }
+    .pill.nit { background: var(--nit); }
+    .card { background: var(--card); border: 1px solid var(--line);
+            border-radius: 14px; padding: 1rem 1.1rem; margin: .75rem 0; }
+    .card.sev-blocker { border-left: 4px solid var(--blocker); }
+    .card.sev-should_fix { border-left: 4px solid var(--should); }
+    .card.sev-nit { border-left: 4px solid var(--nit); }
+    .card header { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+                   margin-bottom: .4rem; }
+    code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .86em; }
+    .evidence { font-size: .9rem; }
+    ul.paths { columns: 2; gap: 1.5rem; }
+    footer { margin-top: 2.5rem; color: var(--muted); font-size: .85rem; }
+  </style>
+</head>
+<body>
+<main>
+  <p class="muted">Local PR Reviewer · read-only · never approves/merges</p>
+  <h1>local test</h1>
+  <p class="muted">
+    origin/main…HEAD<br/>
+    Triage: <code>llama3.2</code>
+    · Strong: <code>llama3.2</code>
+    · Routing: no<br/>
+    Generated 2026-08-05T10:57:58.812560+00:00
+  </p>
+
+  <section class="strip">
+    <div class="stat"><b>0</b>blockers</div>
+    <div class="stat"><b>1</b>should fix</div>
+    <div class="stat"><b>0</b>nits</div>
+    <div class="stat"><b>1</b>prechecks</div>
+    <div class="stat"><b>0</b>muted</div>
+  </section>
+
+  <h2>Summary</h2>
+  <p>hi</p>
+
+  <h2>Findings board</h2>
+  
+            <article class="card sev-should_fix">
+              <header>
+                <span class="pill should_fix">should_fix</span>
+                <code>lib/a.dart:2</code>
+                <span class="muted">model · conf=0.9</span>
+              </header>
+              <p><strong>bug</strong></p>
+              <p class="muted">Recommendation: fix</p>
+              <p class="evidence">Evidence: <code>diff_hunk:lib/a.dart:2</code></p>
+            </article>
+            
+
+  <h2>Analyze notes</h2>
+  <p>none</p>
+
+  <h2>Reviewed files</h2>
+  <ul class="paths">
+    <li><code>lib/a.dart</code></li>
+  </ul>
+
+  <h2>Guardrail notes</h2>
+  <ul>
+    <li>ok</li>
+  </ul>
+
+  <footer>
+    Artifact: <code>report.json</code> + this HTML.
+    Edit <code>mutes.yaml</code> to suppress recurring noise.
+  </footer>
+</main>
+</body>
+</html>

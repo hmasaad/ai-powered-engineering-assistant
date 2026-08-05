@@ -49,6 +49,21 @@ Workflow: `.github/workflows/rag-index-on-merge.yml`
 
 After that, `git pull` on your machine picks up the latest index for reviews.
 
+## Guardrails (v1)
+
+Enforced in code (`guardrails.py`) before/after the model:
+
+| Guardrail | Behavior |
+|-----------|----------|
+| Changed files only | Diff + nearby context limited to reviewable changed paths |
+| Ignore junk | Skips generated, binary, lockfiles, deps, RAG artifacts |
+| Secret scan | Detects & redacts keys/tokens before prompting |
+| Nearby context | Hunk ± ~25 lines — not whole-file dumps |
+| Structured findings | Requires file, line, severity, explanation, recommendation, confidence |
+| Confidence filter | Drops findings below `--min-confidence` (default 0.55) |
+| JSON schema | Validates model output; rejects invalid payloads |
+| Read-only | Never approves, merges, or modifies PRs |
+
 ## Run a review
 
 ```bash
@@ -67,9 +82,10 @@ If the index is missing, the review script builds it first.
 | `--model llama3.2` | Chat model (`OLLAMA_MODEL`) |
 | `--embed-model nomic-embed-text` | Embed model (`OLLAMA_EMBED_MODEL`) |
 | `--top-k 8` | Retrieved chunks (`PR_REVIEW_TOP_K`) |
+| `--min-confidence 0.55` | Drop low-confidence findings |
+| `--json-out path.json` | Write validated JSON review payload |
 | `--no-rag` | Skip retrieval |
-| `--no-open` | Don’t open HTML report |
-| `--dry-gather` | Print prompt context only |
+| `--dry-gather` | Print redacted prompt context only |
 
 ## Advanced RAG
 

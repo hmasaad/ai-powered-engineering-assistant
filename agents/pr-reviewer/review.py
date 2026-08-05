@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local PR reviewer powered by Ollama + SQLite RAG + project RULES.md."""
+"""Local PR reviewer powered by Ollama + SQLite RAG + guardrails."""
 
 from __future__ import annotations
 
@@ -16,6 +16,20 @@ AGENT_DIR = Path(__file__).resolve().parent
 ROOT = AGENT_DIR.parents[1]
 sys.path.insert(0, str(AGENT_DIR))
 
+from guardrails import (  # noqa: E402
+    DEFAULT_MIN_CONFIDENCE,
+    GuardrailReport,
+    assert_read_only_policy,
+    build_guarded_file_context,
+    extract_json_object,
+    filter_changed_paths,
+    filter_diff_to_paths,
+    filter_findings,
+    format_review_markdown,
+    redact_secrets,
+    scan_secrets,
+    validate_review_payload,
+)
 from rag_store import (  # noqa: E402
     DEFAULT_DB,
     DEFAULT_EMBED_MODEL,
@@ -28,8 +42,7 @@ RULES_PATH = AGENT_DIR / "RULES.md"
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 MAX_DIFF_CHARS = 80_000
-MAX_FILE_CHARS = 12_000
-MAX_FILES = 20
+MAX_FILES = 40
 DEFAULT_TOP_K = int(os.environ.get("PR_REVIEW_TOP_K", "8"))
 
 
@@ -75,7 +88,7 @@ def diff_spec(base: str, head: str) -> str:
 
 
 def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
-    """Fetch PR head and return (base_ref, head_ref, label)."""
+    """Fetch PR head and return (base_ref, head_ref, label). Read-only — never approve/merge."""
     head_ref = f"refs/pr-review/{pr_number}"
     label = f"PR #{pr_number}"
 
@@ -118,34 +131,29 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
             f"--base {fallback_base} as the PR base.\n"
         )
 
-    # Ensure base ref exists locally when possible
     if base_ref.startswith("origin/"):
         run(["git", "fetch", "origin", base_ref.removeprefix("origin/")])
 
     return base_ref, head_ref, label
 
 
-def git_diff(base: str, head: str = "HEAD", *, include_dirty: bool = True) -> str:
+def raw_unified_diff(
+    base: str,
+    head: str = "HEAD",
+    *,
+    include_dirty: bool = True,
+) -> str:
+    """Unified diff body used for hunk/nearby parsing (no stat wrappers)."""
     spec = diff_spec(base, head)
-    ranged = run(["git", "diff", "--stat", spec])
-    full = run(["git", "diff", spec])
-
-    parts = [
-        f"### Range diff ({spec})\n{full.stdout or '(empty)'}",
-        f"### Diff stat\n{ranged.stdout or '(empty)'}",
-    ]
+    parts = [run(["git", "diff", spec]).stdout or ""]
     if include_dirty and head == "HEAD":
-        staged = run(["git", "diff", "--cached"])
-        unstaged = run(["git", "diff"])
-        if staged.stdout.strip():
-            parts.append(f"### Staged (uncommitted)\n{staged.stdout}")
-        if unstaged.stdout.strip():
-            parts.append(f"### Unstaged (uncommitted)\n{unstaged.stdout}")
-
-    text = "\n\n".join(parts)
-    if len(text) > MAX_DIFF_CHARS:
-        text = text[:MAX_DIFF_CHARS] + "\n\n[diff truncated]"
-    return text
+        staged = run(["git", "diff", "--cached"]).stdout or ""
+        unstaged = run(["git", "diff"]).stdout or ""
+        if staged.strip():
+            parts.append(staged)
+        if unstaged.strip():
+            parts.append(unstaged)
+    return "\n".join(parts)
 
 
 def changed_files(
@@ -172,45 +180,19 @@ def file_content_at_ref(path: str, ref: str) -> str | None:
     result = run(["git", "show", f"{ref}:{path}"])
     if result.returncode != 0:
         return None
-    content = result.stdout
-    if len(content) > MAX_FILE_CHARS:
-        content = content[:MAX_FILE_CHARS] + "\n[file truncated]"
-    return content
+    return result.stdout
 
 
-def file_context(paths: list[str], ref: str | None = None) -> str:
-    allowed = {
-        ".dart",
-        ".yaml",
-        ".yml",
-        ".json",
-        ".md",
-        ".gradle",
-        ".kt",
-        ".swift",
-    }
-    chunks: list[str] = []
-    for path in paths:
-        if Path(path).suffix not in allowed:
-            continue
-        if ref:
-            content = file_content_at_ref(path, ref)
-            if content is None:
-                continue
-            chunks.append(f"### {path} @{ref}\n```\n{content}\n```")
-            continue
-
-        full = ROOT / path
-        if not full.is_file():
-            continue
-        try:
-            content = full.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        if len(content) > MAX_FILE_CHARS:
-            content = content[:MAX_FILE_CHARS] + "\n[file truncated]"
-        chunks.append(f"### {path}\n```\n{content}\n```")
-    return "\n\n".join(chunks) if chunks else "(no file context)"
+def load_file(path: str, ref: str | None = None) -> str | None:
+    if ref:
+        return file_content_at_ref(path, ref)
+    full = ROOT / path
+    if not full.is_file():
+        return None
+    try:
+        return full.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
 
 
 def flutter_analyze() -> str:
@@ -275,25 +257,34 @@ def build_prompt(
     files: str,
     analyze: str,
     retrieved: str,
+    reviewed_paths: list[str],
 ) -> str:
+    path_list = "\n".join(f"- {p}" for p in reviewed_paths) or "- (none)"
     return f"""Review this local git change set for the salon_booking Flutter project.
 
+{assert_read_only_policy()}
+
 Follow RULES exactly. Use RETRIEVED CONTEXT for architecture and neighboring code.
-Do not invent issues that are not supported by the diff, retrieved context, file context, or analyze output.
+Do not invent issues that are not supported by the diff, retrieved context, nearby file context, or analyze output.
+Review ONLY these changed reviewable files:
+{path_list}
+
+Output MUST be a single JSON object matching the schema in RULES.
+Do not approve, merge, or modify the PR.
 
 # RULES
 {rules}
 
-# RETRIEVED CONTEXT (RAG)
+# RETRIEVED CONTEXT (RAG — nearby architecture only)
 {retrieved}
 
 # FLUTTER ANALYZE
 {analyze}
 
-# DIFF
+# DIFF (changed reviewable files only)
 {diff}
 
-# CHANGED FILE CONTEXT
+# NEARBY CODE (hunks ± context for changed files only)
 {files}
 """
 
@@ -302,13 +293,16 @@ def ollama_chat(model: str, prompt: str) -> str:
     body = {
         "model": model,
         "stream": False,
+        "format": "json",
         "messages": [
             {
                 "role": "system",
                 "content": (
                     "You are a strict but fair local PR reviewer. "
-                    "Follow the provided RULES and output format. "
-                    "Ground findings in DIFF, RETRIEVED CONTEXT, and ANALYZE."
+                    "Follow the provided RULES and emit ONLY valid JSON "
+                    "matching the review schema. "
+                    "Ground findings in DIFF, RETRIEVED CONTEXT, and ANALYZE. "
+                    "Never approve, merge, or modify PRs."
                 ),
             },
             {"role": "user", "content": prompt},
@@ -340,9 +334,89 @@ def ollama_chat(model: str, prompt: str) -> str:
     return content.strip()
 
 
+def apply_output_guardrails(
+    raw: str,
+    *,
+    reviewed_paths: list[str],
+    min_confidence: float,
+    report: GuardrailReport,
+) -> tuple[dict | None, str]:
+    """Validate JSON, filter findings, return (payload|None, markdown_or_error)."""
+    data = extract_json_object(raw)
+    if data is None:
+        report.schema_ok = False
+        report.notes.append("Model output was not valid JSON")
+        return None, (
+            "## Guardrail failure\n"
+            "Model output was not valid JSON. Raw output below.\n\n"
+            f"```\n{raw[:8_000]}\n```"
+        )
+
+    errors = validate_review_payload(data)
+    if errors:
+        report.schema_ok = False
+        report.notes.extend(errors[:20])
+        return None, (
+            "## Guardrail failure\n"
+            "Output failed JSON schema validation:\n"
+            + "\n".join(f"- {e}" for e in errors[:20])
+            + "\n\n```json\n"
+            + json.dumps(data, indent=2)[:8_000]
+            + "\n```"
+        )
+
+    report.schema_ok = True
+    filtered, low, invalid = filter_findings(
+        data,
+        allowed_files=set(reviewed_paths),
+        min_confidence=min_confidence,
+    )
+    report.findings_dropped_low_confidence = low
+    report.findings_dropped_invalid = invalid
+    if low or invalid:
+        report.notes.append(
+            f"Dropped findings: low_confidence={low}, invalid_or_out_of_scope={invalid}"
+        )
+    return filtered, format_review_markdown(filtered)
+
+
+def print_guardrail_summary(report: GuardrailReport) -> None:
+    print("── Guardrails ──", file=sys.stderr)
+    print(
+        f"Reviewed files ({len(report.reviewed_paths)}): "
+        f"{', '.join(report.reviewed_paths) or '(none)'}",
+        file=sys.stderr,
+    )
+    if report.skipped_paths:
+        print(
+            f"Skipped generated/binary/deps ({len(report.skipped_paths)}): "
+            f"{', '.join(report.skipped_paths[:20])}"
+            + ("…" if len(report.skipped_paths) > 20 else ""),
+            file=sys.stderr,
+        )
+    if report.secrets:
+        kinds = sorted({s.kind for s in report.secrets})
+        print(
+            f"Secrets detected: {len(report.secrets)} "
+            f"({', '.join(kinds)}); redacted={report.secrets_redacted}",
+            file=sys.stderr,
+        )
+    print(f"Schema valid: {report.schema_ok}", file=sys.stderr)
+    if report.findings_dropped_low_confidence or report.findings_dropped_invalid:
+        print(
+            "Filtered findings: "
+            f"low_confidence={report.findings_dropped_low_confidence}, "
+            f"invalid={report.findings_dropped_invalid}",
+            file=sys.stderr,
+        )
+    print(assert_read_only_policy(), file=sys.stderr)
+    for note in report.notes:
+        print(f"Note: {note}", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Local Ollama PR reviewer with SQLite RAG",
+        description="Local Ollama PR reviewer with SQLite RAG + guardrails",
     )
     parser.add_argument(
         "--pr",
@@ -378,6 +452,19 @@ def main() -> int:
         help="Number of RAG chunks to retrieve",
     )
     parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=float(
+            os.environ.get("PR_REVIEW_MIN_CONFIDENCE", str(DEFAULT_MIN_CONFIDENCE))
+        ),
+        help=f"Drop findings below this confidence (default: {DEFAULT_MIN_CONFIDENCE})",
+    )
+    parser.add_argument(
+        "--json-out",
+        default="",
+        help="Optional path to write the validated JSON review payload",
+    )
+    parser.add_argument(
         "--no-rag",
         action="store_true",
         help="Skip RAG retrieval",
@@ -385,7 +472,7 @@ def main() -> int:
     parser.add_argument(
         "--dry-gather",
         action="store_true",
-        help="Print gathered context only; do not call chat model",
+        help="Print gathered (redacted) context only; do not call chat model",
     )
     args = parser.parse_args()
 
@@ -393,6 +480,7 @@ def main() -> int:
         sys.stderr.write(f"Missing rules file: {RULES_PATH}\n")
         return 1
 
+    report = GuardrailReport()
     rules = RULES_PATH.read_text(encoding="utf-8")
     head = "HEAD"
     base = args.base
@@ -401,7 +489,7 @@ def main() -> int:
     target_label = "current branch / working tree"
 
     if args.pr is not None:
-        print(f"Fetching PR #{args.pr} from origin...", file=sys.stderr)
+        print(f"Fetching PR #{args.pr} from origin (read-only)...", file=sys.stderr)
         try:
             base, head, target_label = resolve_pr(args.pr, args.base)
         except RuntimeError as exc:
@@ -412,10 +500,36 @@ def main() -> int:
 
     print(f"Reviewing: {target_label}", file=sys.stderr)
     print(f"Diff range: {base}...{head}", file=sys.stderr)
-    print("Gathering diff + file context + flutter analyze...", file=sys.stderr)
-    diff = git_diff(base, head, include_dirty=include_dirty)
-    paths = changed_files(base, head, include_dirty=include_dirty)
-    files = file_context(paths, ref=file_ref)
+    print("Gathering diff + applying guardrails...", file=sys.stderr)
+
+    all_paths = changed_files(base, head, include_dirty=include_dirty)
+    reviewed, skipped = filter_changed_paths(all_paths)
+    report.reviewed_paths = reviewed
+    report.skipped_paths = skipped
+
+    if not reviewed:
+        print_guardrail_summary(report)
+        print(
+            "## Summary\nNo reviewable changed files "
+            "(only generated/binary/dependency paths, or empty diff).\n\n"
+            "## Blockers\nNone\n\n## Should fix\nNone\n\n## Nits\nNone\n\n"
+            "## Analyze notes\nnone"
+        )
+        return 0
+
+    raw_diff = raw_unified_diff(base, head, include_dirty=include_dirty)
+    allowed = set(reviewed)
+    guarded_diff = filter_diff_to_paths(raw_diff, allowed)
+    # Keep a short stat for humans in dry-gather
+    display_diff = guarded_diff
+    if len(display_diff) > MAX_DIFF_CHARS:
+        display_diff = display_diff[:MAX_DIFF_CHARS] + "\n\n[diff truncated]"
+
+    files = build_guarded_file_context(
+        reviewed,
+        diff_text=raw_diff,
+        file_loader=lambda p: load_file(p, file_ref),
+    )
     analyze = flutter_analyze()
 
     if args.no_rag:
@@ -423,14 +537,33 @@ def main() -> int:
     else:
         print("Retrieving RAG context from SQLite index...", file=sys.stderr)
         retrieved = retrieve_context(
-            diff,
-            paths,
+            guarded_diff,
+            reviewed,
             db_path=Path(args.db),
             embed_model=args.embed_model,
             top_k=args.top_k,
         )
 
-    prompt = build_prompt(rules, diff, files, analyze, retrieved)
+    prompt = build_prompt(
+        rules,
+        display_diff,
+        files,
+        analyze,
+        retrieved,
+        reviewed,
+    )
+
+    # Secret scan + redact before any model call
+    secret_hits = scan_secrets(prompt, path="(assembled prompt)")
+    report.secrets = secret_hits
+    prompt, n_redacted = redact_secrets(prompt)
+    report.secrets_redacted = n_redacted
+    if secret_hits:
+        report.notes.append(
+            "Secret-like patterns were redacted before sending context to the model"
+        )
+
+    print_guardrail_summary(report)
 
     if args.dry_gather:
         print(prompt)
@@ -438,8 +571,32 @@ def main() -> int:
 
     ensure_ollama(args.model)
     print(f"Reviewing with Ollama model '{args.model}'...", file=sys.stderr)
-    review = ollama_chat(args.model, prompt)
-    print(review)
+    raw_review = ollama_chat(args.model, prompt)
+
+    payload, markdown = apply_output_guardrails(
+        raw_review,
+        reviewed_paths=reviewed,
+        min_confidence=args.min_confidence,
+        report=report,
+    )
+    # Re-print filter notes after validation
+    if report.findings_dropped_low_confidence or report.findings_dropped_invalid:
+        print(
+            "Post-filter: "
+            f"low_confidence={report.findings_dropped_low_confidence}, "
+            f"invalid={report.findings_dropped_invalid}",
+            file=sys.stderr,
+        )
+
+    if args.json_out and payload is not None:
+        out_path = Path(args.json_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(f"Wrote validated JSON → {out_path}", file=sys.stderr)
+
+    print(markdown)
+    if payload is None:
+        return 2
     return 0
 
 

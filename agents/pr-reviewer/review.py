@@ -127,10 +127,14 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
         )
 
     base_ref = fallback_base
-    gh = run(
-        ["gh", "pr", "view", str(pr_number), "--json", "baseRefName,title,url"]
-    )
-    if gh.returncode == 0 and gh.stdout.strip():
+    try:
+        gh = run(
+            ["gh", "pr", "view", str(pr_number), "--json", "baseRefName,title,url"]
+        )
+    except FileNotFoundError:
+        gh = None
+
+    if gh is not None and gh.returncode == 0 and gh.stdout.strip():
         try:
             meta = json.loads(gh.stdout)
             base_name = meta.get("baseRefName") or "main"
@@ -148,6 +152,7 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
         sys.stderr.write(
             "Note: `gh` unavailable or failed; using "
             f"--base {fallback_base} as the PR base.\n"
+            "Optional: brew install gh\n"
         )
 
     if base_ref.startswith("origin/"):
@@ -157,10 +162,10 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
 
 
 def raw_unified_diff(
-    base: str,
-    head: str = "HEAD",
-    *,
-    include_dirty: bool = True,
+        base: str,
+        head: str = "HEAD",
+        *,
+        include_dirty: bool = True,
 ) -> str:
     spec = diff_spec(base, head)
     parts = [run(["git", "diff", spec]).stdout or ""]
@@ -175,10 +180,10 @@ def raw_unified_diff(
 
 
 def changed_files(
-    base: str,
-    head: str = "HEAD",
-    *,
-    include_dirty: bool = True,
+        base: str,
+        head: str = "HEAD",
+        *,
+        include_dirty: bool = True,
 ) -> list[str]:
     spec = diff_spec(base, head)
     result = run(["git", "diff", "--name-only", spec])
@@ -219,7 +224,7 @@ def flutter_analyze() -> str:
         candidates = [
             Path.home() / "fvm/versions/3.29.0/bin/flutter",
             Path("/Users/apple/fvm/versions/3.29.0/bin/flutter"),
-        ]
+            ]
         which = run(["bash", "-lc", "command -v flutter"])
         if which.returncode == 0 and which.stdout.strip():
             flutter = which.stdout.strip()
@@ -239,12 +244,12 @@ def flutter_analyze() -> str:
 
 
 def retrieve_context(
-    diff: str,
-    paths: list[str],
-    *,
-    db_path: Path,
-    embed_model: str,
-    top_k: int,
+        diff: str,
+        paths: list[str],
+        *,
+        db_path: Path,
+        embed_model: str,
+        top_k: int,
 ) -> str:
     if not db_path.is_file():
         return (
@@ -270,16 +275,16 @@ def retrieve_context(
 
 
 def build_prompt(
-    rules: str,
-    diff: str,
-    files: str,
-    analyze: str,
-    retrieved: str,
-    reviewed_paths: list[str],
-    prechecks_text: str,
-    *,
-    mode: str = "full",
-    candidate_findings: list[dict[str, Any]] | None = None,
+        rules: str,
+        diff: str,
+        files: str,
+        analyze: str,
+        retrieved: str,
+        reviewed_paths: list[str],
+        prechecks_text: str,
+        *,
+        mode: str = "full",
+        candidate_findings: list[dict[str, Any]] | None = None,
 ) -> str:
     path_list = "\n".join(f"- {p}" for p in reviewed_paths) or "- (none)"
     if mode == "strong":
@@ -357,13 +362,13 @@ def ollama_chat(model: str, prompt: str, *, system: str | None = None) -> str:
             {
                 "role": "system",
                 "content": system
-                or (
-                    "You are a strict but fair local PR reviewer. "
-                    "Follow the provided RULES and emit ONLY valid JSON "
-                    "matching the review schema. "
-                    "Ground every finding with evidence. "
-                    "Never approve, merge, or modify PRs."
-                ),
+                           or (
+                               "You are a strict but fair local PR reviewer. "
+                               "Follow the provided RULES and emit ONLY valid JSON "
+                               "matching the review schema. "
+                               "Ground every finding with evidence. "
+                               "Never approve, merge, or modify PRs."
+                           ),
             },
             {"role": "user", "content": prompt},
         ],
@@ -395,15 +400,15 @@ def ollama_chat(model: str, prompt: str, *, system: str | None = None) -> str:
 
 
 def apply_output_guardrails(
-    raw: str,
-    *,
-    reviewed_paths: list[str],
-    min_confidence: float,
-    report: GuardrailReport,
-    diff_text: str,
-    retrieved_text: str,
-    analyze_text: str,
-    allowed_evidence: set[str],
+        raw: str,
+        *,
+        reviewed_paths: list[str],
+        min_confidence: float,
+        report: GuardrailReport,
+        diff_text: str,
+        retrieved_text: str,
+        analyze_text: str,
+        allowed_evidence: set[str],
 ) -> tuple[dict | None, str]:
     data = extract_json_object(raw)
     if data is None:
@@ -420,12 +425,12 @@ def apply_output_guardrails(
         report.schema_ok = False
         report.notes.extend(errors[:20])
         return None, (
-            "## Guardrail failure\n"
-            "Output failed JSON schema validation:\n"
-            + "\n".join(f"- {e}" for e in errors[:20])
-            + "\n\n```json\n"
-            + json.dumps(data, indent=2)[:8_000]
-            + "\n```"
+                "## Guardrail failure\n"
+                "Output failed JSON schema validation:\n"
+                + "\n".join(f"- {e}" for e in errors[:20])
+                + "\n\n```json\n"
+                + json.dumps(data, indent=2)[:8_000]
+                + "\n```"
         )
 
     report.schema_ok = True
@@ -450,12 +455,12 @@ def apply_output_guardrails(
 
 
 def merge_findings(
-    model_payload: dict[str, Any] | None,
-    precheck_findings: list[dict[str, Any]],
+        model_payload: dict[str, Any] | None,
+        precheck_findings: list[dict[str, Any]],
 ) -> dict[str, Any]:
     base = {
         "summary": (model_payload or {}).get("summary")
-        or "Deterministic prechecks only (model produced no valid summary).",
+                   or "Deterministic prechecks only (model produced no valid summary).",
         "analyze_notes": (model_payload or {}).get("analyze_notes") or "none",
         "findings": [],
     }
@@ -482,7 +487,7 @@ def print_guardrail_summary(report: GuardrailReport) -> None:
             f"{', '.join(report.skipped_paths[:20])}"
             + ("…" if len(report.skipped_paths) > 20 else ""),
             file=sys.stderr,
-        )
+            )
     if report.secrets:
         kinds = sorted({s.kind for s in report.secrets})
         print(
@@ -492,9 +497,9 @@ def print_guardrail_summary(report: GuardrailReport) -> None:
         )
     print(f"Schema valid: {report.schema_ok}", file=sys.stderr)
     if (
-        report.findings_dropped_low_confidence
-        or report.findings_dropped_invalid
-        or report.findings_dropped_no_evidence
+            report.findings_dropped_low_confidence
+            or report.findings_dropped_invalid
+            or report.findings_dropped_no_evidence
     ):
         print(
             "Filtered findings: "
@@ -585,7 +590,7 @@ def main() -> int:
 
     empty_payload = {
         "summary": "No reviewable changed files "
-        "(only generated/binary/dependency paths, or empty diff).",
+                   "(only generated/binary/dependency paths, or empty diff).",
         "analyze_notes": "none",
         "findings": [],
     }
@@ -699,9 +704,9 @@ def main() -> int:
 
     routing_used = False
     if (
-        payload is not None
-        and not args.no_routing
-        and strong_model
+            payload is not None
+            and not args.no_routing
+            and strong_model
     ):
         serious = [
             f
@@ -755,7 +760,7 @@ def main() -> int:
                 payload = {
                     "summary": strong_payload.get("summary") or payload.get("summary"),
                     "analyze_notes": strong_payload.get("analyze_notes")
-                    or payload.get("analyze_notes"),
+                                     or payload.get("analyze_notes"),
                     "findings": list(strong_payload.get("findings") or []) + nits,
                 }
         elif serious and strong_model == triage_model:
@@ -799,10 +804,10 @@ def main() -> int:
                 precheck_count=len(precheck_findings),
                 muted_count=len(muted),
                 guardrail_notes=report.notes
-                + [
-                    f"routing_used={routing_used}",
-                    f"prechecks={len(precheck_findings)}",
-                ],
+                                + [
+                                    f"routing_used={routing_used}",
+                                    f"prechecks={len(precheck_findings)}",
+                                ],
             ),
             open_browser=not args.no_open,
         )

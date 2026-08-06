@@ -1,0 +1,15 @@
+{
+  "summary": "1-3 sentences",
+  "analyze_notes": "relevant flutter analyze items, or none",
+  "findings": [
+    {
+      "file": "lib/blocs/example_bloc.dart",
+      "line": 42,
+      "severity": "blocker",
+      "explanation": "What is wrong and why it matters",
+      "recommendation": "Concrete fix",
+      "confidence": 0.86,
+      "evidence": "diff_hunk:lib/blocs/example_bloc.dart:42"
+    }
+  ]
+}

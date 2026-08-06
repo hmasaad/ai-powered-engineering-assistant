@@ -1,0 +1,18 @@
+# Mute / preference store for the local PR reviewer.
+# Findings matching a mute rule are dropped after schema validation.
+#
+# Matching (all specified fields must match):
+#   file_glob  — fnmatch against finding.file
+#   severity   — exact: blocker | should_fix | nit
+#   contains   — case-insensitive substring in explanation or recommendation
+#   pattern    — regex against explanation + recommendation
+#   check_id   — exact precheck id (e.g. debug_print)
+#
+# Examples:
+# mutes:
+#   - id: allow-debug-in-dev-screen
+#     file_glob: "lib/ui/**/debug_*.dart"
+#     check_id: debug_print
+#     reason: "debug screens may print"
+
+mutes: []

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HTML/JSON report pack for local PR reviews (coverage-style)."""
+"""HTML/JSON report pack for local performance reviews."""
 
 from __future__ import annotations
 
@@ -42,6 +42,7 @@ def build_report_payload(
 ) -> dict[str, Any]:
     findings = list(payload.get("findings") or [])
     return {
+        "agent": "performance-reviewer",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "label": label,
         "pr": pr,
@@ -70,7 +71,7 @@ def build_report_payload(
 
 def _finding_cards(findings: list[dict[str, Any]]) -> str:
     if not findings:
-        return '<p class="muted">No findings.</p>'
+        return '<p class="muted">No performance findings.</p>'
     cards: list[str] = []
     for f in findings:
         sev = _esc(f.get("severity"))
@@ -105,23 +106,23 @@ def _render_html(report: dict[str, Any]) -> str:
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>PR Review — {_esc(report.get('label'))}</title>
+  <title>Performance Review — {_esc(report.get('label'))}</title>
   <style>
     :root {{
-      --bg: #f6f4ef;
-      --ink: #1c1917;
-      --muted: #78716c;
-      --line: #e7e5e4;
+      --bg: #f3f7f6;
+      --ink: #14231f;
+      --muted: #5f726c;
+      --line: #d7e3df;
       --blocker: #b91c1c;
       --should: #c2410c;
-      --nit: #1d4ed8;
-      --card: #fffdf8;
+      --nit: #0f766e;
+      --card: #ffffff;
     }}
     body {{
       margin: 0; font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
       background:
-        radial-gradient(circle at 10% 0%, #fde68a55, transparent 40%),
-        linear-gradient(180deg, #faf7f2, var(--bg));
+        radial-gradient(circle at 12% 0%, #99f6e455, transparent 42%),
+        linear-gradient(180deg, #f8fbfa, var(--bg));
       color: var(--ink);
     }}
     main {{ max-width: 980px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }}
@@ -153,7 +154,7 @@ def _render_html(report: dict[str, Any]) -> str:
 </head>
 <body>
 <main>
-  <p class="muted">Local PR Reviewer · read-only · never approves/merges</p>
+  <p class="muted">Local Performance Reviewer · detect performance concerns · read-only</p>
   <h1>{_esc(report.get('label'))}</h1>
   <p class="muted">
     {_esc(report.get('base'))}…{_esc(report.get('head'))}<br/>
@@ -174,7 +175,7 @@ def _render_html(report: dict[str, Any]) -> str:
   <h2>Summary</h2>
   <p>{_esc(report.get('summary'))}</p>
 
-  <h2>Findings board</h2>
+  <h2>Performance findings board</h2>
   {_finding_cards(findings)}
 
   <h2>Analyze notes</h2>
@@ -193,6 +194,7 @@ def _render_html(report: dict[str, Any]) -> str:
   <footer>
     Artifact: <code>report.json</code> + this HTML.
     Edit <code>mutes.yaml</code> to suppress recurring noise.
+    Reuses PR reviewer RAG index at <code>agents/pr-reviewer/index/rag.sqlite</code>.
   </footer>
 </main>
 </body>
@@ -213,16 +215,16 @@ def _dashboard_html(entries: list[dict[str, Any]]) -> str:
     body = "\n".join(rows) or "<tr><td colspan='5'>No reports yet.</td></tr>"
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/>
-<title>PR Review Dashboard</title>
+<title>Performance Review Dashboard</title>
 <style>
- body {{ font-family: "IBM Plex Sans", sans-serif; margin: 2rem; background: #f6f4ef; }}
- table {{ border-collapse: collapse; width: 100%; background: #fffdf8; }}
- th, td {{ border-bottom: 1px solid #e7e5e4; padding: .65rem .75rem; text-align: left; }}
- .muted {{ color: #78716c; }}
+ body {{ font-family: "IBM Plex Sans", sans-serif; margin: 2rem; background: #f3f7f6; }}
+ table {{ border-collapse: collapse; width: 100%; background: #fff; }}
+ th, td {{ border-bottom: 1px solid #d7e3df; padding: .65rem .75rem; text-align: left; }}
+ .muted {{ color: #5f726c; }}
 </style></head>
 <body>
-<h1>PR Review Dashboard</h1>
-<p class="muted">Local reports · read-only agent</p>
+<h1>Performance Review Dashboard</h1>
+<p class="muted">Local reports · performance concerns only · read-only agent</p>
 <table>
 <thead><tr><th>Review</th><th>Blockers</th><th>Should fix</th><th>Nits</th><th>When</th></tr></thead>
 <tbody>{body}</tbody>
@@ -247,13 +249,11 @@ def write_report(
     json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     html_path.write_text(_render_html(report), encoding="utf-8")
 
-    # latest copy
     latest = REPORTS_DIR / "latest"
     if latest.exists():
         shutil.rmtree(latest)
     shutil.copytree(out_dir, latest)
 
-    # dashboard
     entries: list[dict[str, Any]] = []
     for child in sorted(REPORTS_DIR.iterdir()):
         if not child.is_dir() or child.name == "latest":

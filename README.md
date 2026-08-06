@@ -38,18 +38,22 @@ Without retrieval, the model mostly sees the patch and guesses — more noise an
 
 RAG fixes that by:
 
-1. Indexing the repo into a local SQLite vector store
-2. Retrieving the most relevant code chunks for the change
+1. Indexing the repo into a local SQLite store (vectors + FTS)
+2. Advanced retrieval (hybrid search, multi-query, architecture path expansion)
 3. Passing those chunks into the review prompt with the diff and rules
 
 So feedback can respect this project’s BLoC layering instead of generic Flutter advice.
+
+Guardrails (v1) keep reviews scoped to changed reviewable files, redact secrets, require schema-valid evidence-bound findings with confidence, support mutes, and keep the agent read-only (never approve/merge).
+
+High-impact upgrades: deterministic prechecks → triage model → optional strong-model routing → HTML/JSON report pack.
 
 ### How it works
 
 ```
 ┌─────────────────┐
-│  Index (once /  │  chunk lib/** + rules → Ollama embeddings
-│  after refactors)│  → agents/pr-reviewer/index/rag.sqlite
+│  Index          │  full rebuild locally, or incremental on merge to main
+│  (RAG sqlite)   │  → agents/pr-reviewer/index/rag.sqlite (committed)
 └────────┬────────┘
          │
          ▼
@@ -59,7 +63,7 @@ So feedback can respect this project’s BLoC layering instead of generic Flutte
 │  2. Collect git diff (+ optional --pr)
 │  3. Run flutter analyze
 │  4. Embed query from paths/symbols/diff
-│  5. Retrieve top-k chunks (cosine similarity)
+│  5. Advanced RAG: hybrid vector+FTS, multi-query, MMR
 │  6. Ask local Ollama chat model
 │  7. Print Summary / Blockers / Should fix / Nits
 └─────────────────┘
@@ -68,11 +72,12 @@ So feedback can respect this project’s BLoC layering instead of generic Flutte
 | Piece | Role |
 |--------|------|
 | `agents/pr-reviewer/RULES.md` | Project review standards (architecture, tone, output format) |
-| `agents/pr-reviewer/rag_store.py` | Chunking, embeddings, SQLite search |
-| `agents/pr-reviewer/index.py` | Builds/refreshes the vector index |
+| `agents/pr-reviewer/rag_store.py` | Advanced RAG: hybrid vector+FTS, RRF, MMR, metadata |
+| `agents/pr-reviewer/index.py` | Full + incremental SQLite index updates |
 | `agents/pr-reviewer/review.py` | Orchestrates gather → retrieve → review |
-| `rag.sqlite` | Local index (gitignored) |
-| Ollama | Embeddings (`nomic-embed-text`) + chat (`llama3.2`) on your machine |
+| `agents/pr-reviewer/index/rag.sqlite` | Vector index (committed; refreshed on merge to main) |
+| `.github/workflows/rag-index-on-merge.yml` | Incremental re-embed when PRs land on main |
+| Ollama | Embeddings (`nomic-embed-text`) + chat (`llama3.2`) |
 
 ### Setup
 
@@ -82,9 +87,41 @@ ollama serve
 ollama pull llama3.2
 ollama pull nomic-embed-text
 
-# build/refresh vector index (re-run after large refactors)
+# full rebuild (local)
 ./scripts/pr-review-index.sh
 ```
+
+### RAG updates when a PR merges
+
+```
+PR merges into main
+        │
+        ▼
+GitHub Action (push to main)
+        │
+        ▼
+Diff before...after → modified / deleted files only
+        │
+        ▼
+Delete old SQLite chunks for those paths
+        │
+        ▼
+Re-embed updated file content with Ollama
+        │
+        ▼
+Commit agents/pr-reviewer/index/rag.sqlite back to main
+        │
+        ▼
+Future ./scripts/pr-review.sh uses the latest index (after git pull)
+```
+
+Local incremental (same as CI):
+
+```bash
+./scripts/pr-review-index-update.sh --since <before_sha> --until HEAD
+```
+
+Manual full rebuild anytime: `./scripts/pr-review-index.sh`
 
 ### Review
 
@@ -94,20 +131,53 @@ ollama pull nomic-embed-text
 
 # specific GitHub PR (fetches pull/<n>/head; does not change your checkout)
 ./scripts/pr-review.sh --pr 42
+
+# inspect gathered context without calling the chat model
+./scripts/pr-review.sh --pr 42 --dry-gather
 ```
 
-When the review finishes, it writes a **coverage-style HTML report** (committed under `agents/pr-reviewer/reports/`) and opens it:
+Useful flags: `--base`, `--model`, `--embed-model`, `--top-k`, `--no-rag`.
 
+More detail: `agents/pr-reviewer/README.md`
+
+## Local Performance Reviewer (detect performance concerns)
+
+Sibling agent to the PR reviewer. Same Ollama + shared SQLite RAG pipeline, but focused on Flutter performance: rebuild waste, list/scroll cost, images, main-isolate stalls, and related jank risks.
+
+```bash
+# uses the same RAG index as the PR reviewer
+./scripts/perf-review.sh
+./scripts/perf-review.sh --pr 42
+./scripts/perf-review.sh --dry-gather
 ```
-agents/pr-reviewer/reports/
-  index.html          # dashboard of all reviewed PRs
-  pr-42/index.html    # this PR’s visual review (overwritten on each run)
-  pr-42/report.json
-  latest/index.html   # most recent run
+
+| Piece | Role |
+|--------|------|
+| `agents/performance-reviewer/RULES.md` | Performance review standards |
+| `agents/performance-reviewer/prechecks.py` | Deterministic Flutter perf heuristics |
+| `agents/performance-reviewer/review.py` | Orchestrates gather → retrieve → review |
+| `agents/pr-reviewer/index/rag.sqlite` | Shared vector/FTS index |
+| `agents/performance-reviewer/reports/` | HTML/JSON report pack |
+
+More detail: `agents/performance-reviewer/README.md`
+
+## Local Bug Investigator (root-cause analysis)
+
+Sibling agent focused on **investigating bugs from symptoms/stacktraces** (optional PR scope). Same Ollama + shared SQLite RAG pipeline, with bug-pattern prechecks and an investigation report (hypotheses → root cause → repro → fix).
+
+```bash
+./scripts/bug-investigate.sh --bug "Confirm booking does nothing after selecting a slot"
+./scripts/bug-investigate.sh --stacktrace crash.txt
+./scripts/bug-investigate.sh --bug "List does not refresh" --pr 42
+./scripts/bug-investigate.sh --dry-gather --bug "..."
 ```
 
-Same idea as bloc coverage (`flutter test --coverage` → `genhtml` → open HTML):
-each `./scripts/pr-review.sh --pr N` refreshes that PR’s report until you stop
-running it (typically until the PR is merged).
+| Piece | Role |
+|--------|------|
+| `agents/bug-investigator/RULES.md` | Investigation standards + JSON schema |
+| `agents/bug-investigator/prechecks.py` | Deterministic bug-pattern heuristics |
+| `agents/bug-investigator/investigate.py` | Orchestrates gather → retrieve → investigate |
+| `agents/pr-reviewer/index/rag.sqlite` | Shared vector/FTS index |
+| `agents/bug-investigator/reports/` | HTML/JSON report pack |
 
-Useful flags: `--base`, `--model`, `--embed-model`, `--top-k`, `--no-rag`, `--no-open`.
+More detail: `agents/bug-investigator/README.md`

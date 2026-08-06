@@ -1,0 +1,18 @@
+# Mute / preference store for the local Bug Investigator.
+# Findings matching a mute rule are dropped after schema validation.
+#
+# Matching (all specified fields must match):
+#   file_glob  — fnmatch against finding.file
+#   severity   — exact: blocker | should_fix | nit
+#   contains   — case-insensitive substring in explanation or recommendation
+#   pattern    — regex against explanation + recommendation
+#   check_id   — exact precheck id (e.g. empty_catch)
+#
+# Examples:
+# mutes:
+#   - id: allow-sample-api-delay
+#     file_glob: "lib/api/**"
+#     contains: "Future.delayed"
+#     reason: "sample APIs intentionally delay"
+
+mutes: []

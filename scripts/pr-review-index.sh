@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build local SQLite RAG index (Ollama embeddings).
+# Full RAG index rebuild (local).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,4 +19,4 @@ fi
 echo "Ensure embed model: ${EMBED_MODEL}"
 ollama pull "${EMBED_MODEL}" >/dev/null || true
 
-exec python3 "$ROOT/agents/pr-reviewer/index.py" --embed-model "${EMBED_MODEL}" "$@"
+exec python3 "$ROOT/agents/pr-reviewer/index.py" --full --embed-model "${EMBED_MODEL}" "$@"

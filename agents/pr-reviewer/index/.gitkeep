@@ -1,0 +1,6 @@
+# RAG vector index (SQLite)
+#
+# `rag.sqlite` is updated on merge to main by
+# `.github/workflows/rag-index-on-merge.yml` (incremental embeddings).
+# Local full rebuild: `./scripts/pr-review-index.sh`
+# Local incremental: `./scripts/pr-review-index-update.sh --since <sha>`

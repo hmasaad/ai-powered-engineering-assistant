@@ -1,0 +1,85 @@
+name: Update RAG index on main
+
+# When a PR merges into main (push to main), refresh only changed-file embeddings.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      # Avoid re-entry when this workflow commits the sqlite index / reports
+      - "agents/pr-reviewer/index/**"
+      - "agents/pr-reviewer/reports/**"
+  workflow_dispatch:
+    inputs:
+      full_rebuild:
+        description: "Rebuild the entire RAG index"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rag-index-main
+  cancel-in-progress: false
+
+jobs:
+  update-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+              echo "Ollama is up"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null
+          ollama pull nomic-embed-text
+
+      - name: Update RAG index (incremental or full)
+        env:
+          OLLAMA_HOST: http://127.0.0.1:11434
+          OLLAMA_EMBED_MODEL: nomic-embed-text
+        run: |
+          chmod +x scripts/pr-review-index-update.sh scripts/pr-review-index.sh
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.full_rebuild }}" = "true" ]; then
+            ./scripts/pr-review-index.sh --full
+          else
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.sha }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "No usable before SHA — full rebuild"
+              ./scripts/pr-review-index.sh --full
+            else
+              echo "Incremental update $BEFORE...$AFTER"
+              ./scripts/pr-review-index-update.sh --since "$BEFORE" --until "$AFTER"
+            fi
+          fi
+
+      - name: Commit updated index
+        run: |
+          mkdir -p agents/pr-reviewer/index
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add agents/pr-reviewer/index/rag.sqlite
+          if git diff --cached --quiet; then
+            echo "No index changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(rag): update embeddings after merge to main [skip ci]"
+          git push

@@ -1,0 +1,42 @@
+{
+  "summary": "Confirm booking can no-op when ResponseEntity.exception is ignored after createBooking.",
+  "bug_statement": "Tapping Confirm does nothing after selecting stylist and time slot.",
+  "analyze_notes": "none",
+  "hypotheses": [
+    {
+      "id": "H1",
+      "claim": "createBooking failure path does not surface error to the UI",
+      "likelihood": "high",
+      "confidence": 0.84,
+      "status": "likely",
+      "evidence": [
+        "rag:lib/blocs/booking_bloc.dart:77-120",
+        "precheck:ignored_response_exception"
+      ]
+    }
+  ],
+  "likely_root_cause": {
+    "file": "lib/blocs/booking_bloc.dart",
+    "line": 99,
+    "explanation": "Async confirm path likely drops ResponseEntity.exception instead of emitting an error ScreenState.",
+    "confidence": 0.8,
+    "evidence": "rag:lib/blocs/booking_bloc.dart:99"
+  },
+  "reproduction_steps": [
+    "Open a salon service booking screen",
+    "Select stylist, day, and available slot",
+    "Tap Confirm booking and observe missing feedback"
+  ],
+  "recommended_fix": "After createBooking, branch on response.exception and emit submitError / ScreenState.error; show it in the UI.",
+  "findings": [
+    {
+      "file": "lib/blocs/booking_bloc.dart",
+      "line": 99,
+      "severity": "blocker",
+      "explanation": "Booking confirm ignores API exception, so the user sees no failure.",
+      "recommendation": "Emit submitError from ResponseEntity.exception and map it in BookingScreen.",
+      "confidence": 0.84,
+      "evidence": "rag:lib/blocs/booking_bloc.dart:99"
+    }
+  ]
+}

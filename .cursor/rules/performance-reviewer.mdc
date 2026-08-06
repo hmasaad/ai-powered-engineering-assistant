@@ -1,0 +1,28 @@
+---
+description: Local Ollama Performance Reviewer guidance for this Flutter project
+globs:
+alwaysApply: true
+---
+
+# Local Performance Reviewer
+
+Use the local Ollama + SQLite RAG agent (not Cursor Cloud) to detect performance concerns:
+
+```bash
+./scripts/pr-review-index.sh   # shared RAG index (with PR reviewer)
+./scripts/perf-review.sh       # current branch
+./scripts/perf-review.sh --pr 42
+```
+
+Rules: `agents/performance-reviewer/RULES.md`.
+Index: `agents/pr-reviewer/index/rag.sqlite` (shared).
+
+Focus on:
+
+- Rebuild waste (`BlocBuilder` without `buildWhen`, broad `setState`)
+- Lists / scroll (`ListView(children:)` vs builders, `shrinkWrap`, nested scrollables)
+- Images (`Image.network` without cache size hints)
+- Main-isolate stalls (sync JSON/file work on UI/bloc paths)
+- Layout/animation cost (`Opacity` for fades)
+
+Keep findings actionable and file-scoped. Prefer evidence from the diff, nearby hunks, prechecks, and RAG — not generic Flutter advice.

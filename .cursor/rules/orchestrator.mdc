@@ -1,0 +1,29 @@
+---
+description: Local Ollama Orchestrator guidance for multi-agent reviews
+globs:
+alwaysApply: true
+---
+
+# Local Orchestrator
+
+Use the local Ollama + SQLite RAG **orchestrator** (not Cursor Cloud) to fan out to specialist agents and aggregate findings:
+
+```bash
+./scripts/pr-review-index.sh   # shared RAG index
+./scripts/orchestrate.sh       # pr + security + performance
+./scripts/orchestrate.sh --pr 42
+./scripts/orchestrate.sh --parallel
+./scripts/orchestrate.sh --bug "..." --pr 42
+```
+
+Rules: `agents/orchestrator/RULES.md`.
+Index: `agents/pr-reviewer/index/rag.sqlite` (shared).
+
+Default specialists:
+
+- `pr` — architecture / BLoC / contracts (`./scripts/pr-review.sh`)
+- `security` — secrets, TLS, storage, logging (`./scripts/sec-review.sh`)
+- `performance` — rebuild / scroll / isolate jank (`./scripts/perf-review.sh`)
+- `bug` — only with `--bug` / `--stacktrace` or `--agents bug`
+
+Prefer the orchestrator when the user wants a full local review pass. Keep findings actionable and agent-tagged. Never auto-patch or merge.

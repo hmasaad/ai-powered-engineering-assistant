@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/orchestrator/orchestration_output.schema.json",
+  "title": "OrchestratorOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "agent_runs",
+    "findings",
+    "counts",
+    "read_only"
+  ],
+  "properties": {
+    "summary": { "type": "string" },
+    "agent_runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["agent", "status", "exit_code"],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "enum": ["pr", "security", "performance", "bug"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ok", "failed", "skipped"]
+          },
+          "exit_code": { "type": "integer" },
+          "duration_ms": { "type": "integer" },
+          "report_path": { "type": ["string", "null"] },
+          "error": { "type": "string" },
+          "child_summary": { "type": "string" }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["agent", "severity", "explanation"],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "enum": ["pr", "security", "performance", "bug"]
+          },
+          "file": { "type": "string" },
+          "line": { "type": ["integer", "null"] },
+          "severity": {
+            "type": "string",
+            "enum": ["blocker", "should_fix", "nit"]
+          },
+          "explanation": { "type": "string" },
+          "recommendation": { "type": "string" },
+          "confidence": { "type": "number" },
+          "evidence": { "type": "string" },
+          "source": { "type": "string" }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blocker", "should_fix", "nit", "total", "failed_agents"],
+      "properties": {
+        "blocker": { "type": "integer" },
+        "should_fix": { "type": "integer" },
+        "nit": { "type": "integer" },
+        "total": { "type": "integer" },
+        "failed_agents": { "type": "integer" }
+      }
+    },
+    "bug_investigations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "read_only": { "type": "boolean", "const": true }
+  }
+}

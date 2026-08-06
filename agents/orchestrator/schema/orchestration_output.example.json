@@ -1,0 +1,62 @@
+{
+  "summary": "3 agents ran: 1 blocker (security), 2 should_fix (pr + performance), 1 nit (pr).",
+  "agent_runs": [
+    {
+      "agent": "pr",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 42000,
+      "report_path": "agents/pr-reviewer/reports/latest/report.json",
+      "child_summary": "BlocBuilder missing buildWhen on booking confirm path."
+    },
+    {
+      "agent": "security",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 38000,
+      "report_path": "agents/security-reviewer/reports/latest/report.json",
+      "child_summary": "Cleartext booking API endpoint."
+    },
+    {
+      "agent": "performance",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 41000,
+      "report_path": "agents/performance-reviewer/reports/latest/report.json",
+      "child_summary": "ListView(children:) rebuilds full salon list."
+    }
+  ],
+  "findings": [
+    {
+      "agent": "security",
+      "file": "lib/services/booking_service.dart",
+      "line": 28,
+      "severity": "blocker",
+      "explanation": "Remote booking API uses http://; tokens and PII can be observed on the network.",
+      "recommendation": "Switch the base URL to https:// and reject cleartext in release builds.",
+      "confidence": 0.9,
+      "evidence": "diff_hunk:lib/services/booking_service.dart:28",
+      "source": "precheck"
+    },
+    {
+      "agent": "pr",
+      "file": "lib/ui/booking/booking_confirm_screen.dart",
+      "line": 54,
+      "severity": "should_fix",
+      "explanation": "BlocBuilder has no buildWhen; confirm button rebuilds on unrelated state.",
+      "recommendation": "Add buildWhen comparing the confirm/loading fields only.",
+      "confidence": 0.8,
+      "evidence": "diff_hunk:lib/ui/booking/booking_confirm_screen.dart:54",
+      "source": "model"
+    }
+  ],
+  "counts": {
+    "blocker": 1,
+    "should_fix": 2,
+    "nit": 1,
+    "total": 4,
+    "failed_agents": 0
+  },
+  "bug_investigations": [],
+  "read_only": true
+}

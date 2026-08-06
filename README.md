@@ -202,3 +202,25 @@ Sibling agent focused on **investigating bugs from symptoms/stacktraces** (optio
 | `agents/bug-investigator/reports/` | HTML/JSON report pack |
 
 More detail: `agents/bug-investigator/README.md`
+
+## Local Orchestrator (multi-agent fan-out)
+
+Coordinates the PR, security, and performance reviewers on the same change set (and the bug investigator when you pass a symptom), then aggregates findings into one dashboard. Does not invent findings — only routes and merges specialist reports.
+
+```bash
+./scripts/orchestrate.sh
+./scripts/orchestrate.sh --pr 42
+./scripts/orchestrate.sh --parallel
+./scripts/orchestrate.sh --agents security,performance
+./scripts/orchestrate.sh --bug "Confirm booking does nothing" --pr 42
+```
+
+| Piece | Role |
+|--------|------|
+| `agents/orchestrator/RULES.md` | Routing + aggregation standards |
+| `agents/orchestrator/orchestrate.py` | Fan-out → collect → combined report |
+| `agents/orchestrator/report.py` | Combined HTML/JSON dashboard |
+| `agents/pr-reviewer/index/rag.sqlite` | Shared vector/FTS index |
+| `agents/orchestrator/reports/` | Aggregated report pack |
+
+More detail: `agents/orchestrator/README.md`

@@ -1,0 +1,18 @@
+# Mute / preference store for the local Security Reviewer.
+# Findings matching a mute rule are dropped after schema validation.
+#
+# Matching (all specified fields must match):
+#   file_glob  — fnmatch against finding.file
+#   severity   — exact: blocker | should_fix | nit
+#   contains   — case-insensitive substring in explanation or recommendation
+#   pattern    — regex against explanation + recommendation
+#   check_id   — exact precheck id (e.g. cleartext_http)
+#
+# Examples:
+# mutes:
+#   - id: allow-local-http-sample-api
+#     file_glob: "lib/api/**"
+#     check_id: cleartext_http
+#     reason: "sample API intentionally uses loopback-adjacent fixtures"
+
+mutes: []

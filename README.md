@@ -161,6 +161,27 @@ Sibling agent to the PR reviewer. Same Ollama + shared SQLite RAG pipeline, but 
 
 More detail: `agents/performance-reviewer/README.md`
 
+## Local Security Reviewer (detect security concerns)
+
+Sibling agent to the PR reviewer. Same Ollama + shared SQLite RAG pipeline, but focused on Flutter security: secrets, cleartext transport, insecure storage, sensitive logging, WebView/deep-link risks, and TLS/auth bypasses.
+
+```bash
+# uses the same RAG index as the PR reviewer
+./scripts/sec-review.sh
+./scripts/sec-review.sh --pr 42
+./scripts/sec-review.sh --dry-gather
+```
+
+| Piece | Role |
+|--------|------|
+| `agents/security-reviewer/RULES.md` | Security review standards |
+| `agents/security-reviewer/prechecks.py` | Deterministic Flutter security heuristics |
+| `agents/security-reviewer/review.py` | Orchestrates gather → retrieve → review |
+| `agents/pr-reviewer/index/rag.sqlite` | Shared vector/FTS index |
+| `agents/security-reviewer/reports/` | HTML/JSON report pack |
+
+More detail: `agents/security-reviewer/README.md`
+
 ## Local Bug Investigator (root-cause analysis)
 
 Sibling agent focused on **investigating bugs from symptoms/stacktraces** (optional PR scope). Same Ollama + shared SQLite RAG pipeline, with bug-pattern prechecks and an investigation report (hypotheses → root cause → repro → fix).

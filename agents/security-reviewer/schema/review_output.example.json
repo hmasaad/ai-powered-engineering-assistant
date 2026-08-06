@@ -1,0 +1,15 @@
+{
+  "summary": "Cleartext API endpoint and SharedPreferences token storage create credential-exposure risk on booking flows.",
+  "analyze_notes": "none",
+  "findings": [
+    {
+      "file": "lib/services/booking_service.dart",
+      "line": 28,
+      "severity": "should_fix",
+      "explanation": "Remote booking API uses http://; tokens and PII can be observed on the network.",
+      "recommendation": "Switch the base URL to https:// and reject cleartext in release builds.",
+      "confidence": 0.9,
+      "evidence": "diff_hunk:lib/services/booking_service.dart:28"
+    }
+  ]
+}

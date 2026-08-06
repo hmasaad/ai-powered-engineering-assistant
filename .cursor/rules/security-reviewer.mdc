@@ -1,0 +1,29 @@
+---
+description: Local Ollama Security Reviewer guidance for this Flutter project
+globs:
+alwaysApply: true
+---
+
+# Local Security Reviewer
+
+Use the local Ollama + SQLite RAG agent (not Cursor Cloud) to detect security concerns:
+
+```bash
+./scripts/pr-review-index.sh   # shared RAG index (with PR reviewer)
+./scripts/sec-review.sh        # current branch
+./scripts/sec-review.sh --pr 42
+```
+
+Rules: `agents/security-reviewer/RULES.md`.
+Index: `agents/pr-reviewer/index/rag.sqlite` (shared).
+
+Focus on:
+
+- Hardcoded secrets / API keys / tokens in source
+- Cleartext `http://` endpoints and TLS/certificate bypasses
+- Insecure storage (`SharedPreferences` for secrets)
+- Sensitive logging (`print` / `debugPrint` of tokens/PII)
+- Risky WebView settings and unvalidated URL / deep-link launches
+- Debug auth/security bypasses that can ship
+
+Keep findings actionable and file-scoped. Prefer evidence from the diff, nearby hunks, prechecks, and RAG — not generic security advice. Never auto-patch or merge.

@@ -3,6 +3,10 @@ agents/pr-reviewer/index/*
 !agents/pr-reviewer/index/rag.sqlite
 !agents/pr-reviewer/index/.gitkeep
 
+# Agent HTML/JSON reports — local only, never push
+agents/*/reports/**
+!agents/*/reports/.gitkeep
+
 # Miscellaneous
 *.class
 *.log

@@ -127,10 +127,14 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
         )
 
     base_ref = fallback_base
-    gh = run(
-        ["gh", "pr", "view", str(pr_number), "--json", "baseRefName,title,url"]
-    )
-    if gh.returncode == 0 and gh.stdout.strip():
+    try:
+        gh = run(
+            ["gh", "pr", "view", str(pr_number), "--json", "baseRefName,title,url"]
+        )
+    except FileNotFoundError:
+        gh = None
+
+    if gh is not None and gh.returncode == 0 and gh.stdout.strip():
         try:
             meta = json.loads(gh.stdout)
             base_name = meta.get("baseRefName") or "main"
@@ -148,6 +152,7 @@ def resolve_pr(pr_number: int, fallback_base: str) -> tuple[str, str, str]:
         sys.stderr.write(
             "Note: `gh` unavailable or failed; using "
             f"--base {fallback_base} as the PR base.\n"
+            "Optional: brew install gh\n"
         )
 
     if base_ref.startswith("origin/"):

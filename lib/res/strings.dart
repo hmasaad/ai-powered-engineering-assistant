@@ -9,6 +9,8 @@ class Strings {
   static const stylists = 'Stylists';
   static const pickTime = 'Pick a time';
   static const noResults = 'No salons found';
+  static const filterAll = 'All';
+  static const filterByTag = 'Filter by tag';
   static const retry = 'Retry';
   static const noInternet = 'Something went wrong. Please try again.';
 }

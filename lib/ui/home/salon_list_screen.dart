@@ -97,6 +97,13 @@ class _SalonListScreenState
                             ),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        _TagFilterRow(
+                          tags: data.availableTags,
+                          selectedTag: data.selectedTag,
+                          onSelected: (tag) =>
+                              bloc.add(FilterSalonsByTagEvent(tag)),
+                        ),
                       ],
                     ),
                   ),
@@ -141,6 +148,66 @@ class _SalonListScreenState
           },
         );
     }
+  }
+}
+
+class _TagFilterRow extends StatelessWidget {
+  final List<String> tags;
+  final String? selectedTag;
+  final ValueChanged<String?> onSelected;
+
+  const _TagFilterRow({
+    required this.tags,
+    required this.selectedTag,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          Strings.filterByTag,
+          style: TextStyle(
+            color: AppColors.muted,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: const Text(Strings.filterAll),
+                  selected: selectedTag == null,
+                  onSelected: (_) => onSelected(null),
+                  selectedColor: AppColors.accentSoft,
+                  checkmarkColor: AppColors.accent,
+                ),
+              ),
+              ...tags.map(
+                (tag) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(tag),
+                    selected: selectedTag == tag,
+                    onSelected: (_) =>
+                        onSelected(selectedTag == tag ? null : tag),
+                    selectedColor: AppColors.accentSoft,
+                    checkmarkColor: AppColors.accent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -212,6 +279,36 @@ class _SalonCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (salon.tags.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: salon.tags
+                            .take(3)
+                            .map(
+                              (tag) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentSoft,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),

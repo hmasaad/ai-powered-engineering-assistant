@@ -1,0 +1,41 @@
+{
+  "pr": 1,
+  "label": "PR #1",
+  "base": "origin/main",
+  "head": "refs/pr-review/1",
+  "model": "llama3.2",
+  "generated_at": "2026-08-04T12:00:39.114350+00:00",
+  "changed_files": [
+    "README.md",
+    "agents/pr-reviewer/README.md",
+    "agents/pr-reviewer/RULES.md",
+    "agents/pr-reviewer/report.py",
+    "agents/pr-reviewer/reports/index.html",
+    "agents/pr-reviewer/reports/latest/index.html",
+    "agents/pr-reviewer/reports/latest/report.json",
+    "agents/pr-reviewer/reports/pr-1/index.html",
+    "agents/pr-reviewer/reports/pr-1/report.json",
+    "agents/pr-reviewer/reports/pr-1/review.md",
+    "agents/pr-reviewer/review.py",
+    "lib/api/salon_api.dart",
+    "lib/blocs/salon_list_bloc.dart",
+    "lib/core/contracts/salon_list_contract.dart",
+    "lib/res/strings.dart",
+    "lib/services/salon_service.dart",
+    "lib/ui/home/salon_list_screen.dart"
+  ],
+  "summary": "No summary provided.",
+  "analyze": "Resolving dependencies...\nThe current Dart SDK version is 3.4.1.\n\nBecause salon_booking requires SDK version ^3.7.0, version solving failed.\n\n\nYou can try the following suggestion to make the pubspec resolve:\n* Try using the Flutter SDK version: 3.44.8.",
+  "findings": [],
+  "counts": {
+    "blockers": 0,
+    "should_fix": 0,
+    "nits": 0,
+    "total": 0,
+    "valid": 0,
+    "partial": 0,
+    "noise": 0,
+    "unchecked": 0
+  },
+  "raw_markdown": "{\n  \"name\": \"SalonListScreen\",\n  \"type\": \"class\",\n  \"children\": [\n    {\n      \"name\": \"_SalonCard\",\n      \"type\": \"class\",\n      \"children\": []\n    },\n    {\n      \"name\": \"_TagFilterRow\",\n      \"type\": \"class\",\n      \"children\": []\n    }\n  ]\n}"
+}

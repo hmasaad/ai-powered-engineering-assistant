@@ -16,6 +16,7 @@ class SalonListBloc extends BaseBloc<SalonListEvent, SalonListData> {
     on<InitSalonListEvent>(_onInit);
     on<RetrySalonListEvent>(_onRetry);
     on<SearchSalonsEvent>(_onSearch);
+    on<FilterSalonsByTagEvent>(_onFilterByTag);
     on<OpenSalonDetailsEvent>(_onOpenDetails);
     on<UpdateSalonListStateEvent>((event, emit) => emit(event.state));
   }
@@ -26,12 +27,26 @@ class SalonListBloc extends BaseBloc<SalonListEvent, SalonListData> {
 
   void _onRetry(RetrySalonListEvent event, Emitter<SalonListData> emit) {
     emit(state.copyWith(state: ScreenState.loading, clearError: true));
-    _loadSalons(query: state.query);
+    _loadSalons(query: state.query, tag: state.selectedTag);
   }
 
   void _onSearch(SearchSalonsEvent event, Emitter<SalonListData> emit) {
     emit(state.copyWith(query: event.query, state: ScreenState.loading));
-    _loadSalons(query: event.query);
+    _loadSalons(query: event.query, tag: state.selectedTag);
+  }
+
+  void _onFilterByTag(
+    FilterSalonsByTagEvent event,
+    Emitter<SalonListData> emit,
+  ) {
+    emit(
+      state.copyWith(
+        selectedTag: event.tag,
+        clearTag: event.tag == null,
+        state: ScreenState.loading,
+      ),
+    );
+    _loadSalons(query: state.query, tag: event.tag);
   }
 
   void _onOpenDetails(
@@ -43,8 +58,8 @@ class SalonListBloc extends BaseBloc<SalonListEvent, SalonListData> {
     );
   }
 
-  void _loadSalons({String? query}) {
-    _salonService.fetchSalons(query: query).then((response) {
+  void _loadSalons({String? query, String? tag}) {
+    _salonService.fetchSalons(query: query, tag: tag).then((response) {
       if (response.isSuccess && response.data != null) {
         add(
           UpdateSalonListStateEvent(
